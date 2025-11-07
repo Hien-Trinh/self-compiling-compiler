@@ -124,6 +124,12 @@ class Parser:
         expect = self.expect('ID')
         name = expect[1]
         line_num = expect[2]
+
+        # Check if ID declared
+        if name not in self.variables:
+            raise SyntaxError(
+                f'Undeclared identifier, {name}, line {line_num}')
+
         if self.peek() == 'ASSIGN':
             self.next()
             expr = self.expr()
