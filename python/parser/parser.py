@@ -102,15 +102,18 @@ class Parser:
 
     def let_stmt(self):
         self.expect('LET')
-        name = self.expect('ID')[1]
+        var_type = 'int'
+        if self.peek() == 'TYPE':
+            var_type = self.expect('TYPE')[1]
+        var_name = self.expect('ID')[1]
         self.expect('ASSIGN')
         expr = self.expr()
         self.expect('SEMICOL')
-        if name in self.variables:
-            return f'{name} = {expr};'
+        if var_name in self.variables:
+            return f'{var_name} = {expr};'
         else:
-            self.variables.add(name)
-            return f'int {name} = {expr};'
+            self.variables.add(var_name)
+            return f'{var_type} {var_name} = {expr};'
 
     def print_stmt(self):
         self.expect('PRINT')
