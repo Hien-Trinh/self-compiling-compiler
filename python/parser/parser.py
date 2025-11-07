@@ -7,7 +7,7 @@ Description: parser takes in a list of tokens and output c code
 
 class Parser:
     """
-    A parser that works only with int for now
+    A parser that works...
     """
 
     def __init__(self, tokens):
@@ -29,7 +29,11 @@ class Parser:
         return tok
 
     def parse(self):
-        code = ['#include <stdio.h>', '']
+        code = [
+            '#include <stdio.h>',
+            '#include <string.h>',
+            ''
+        ]
         while self.peek() != 'EOF':
             code.append(self.fn_decl())
         return '\n'.join(code)
@@ -38,29 +42,41 @@ class Parser:
     # Functions
 
     def fn_decl(self):
+        """
+        ah rettype name(int integer1, integer2, string str1) {
+            body;
+        }
+        """
         indent = self.expect('FN')[3]
+
+        # Set default return type to int if no type given
+        rettype = 'int'
+        if self.peek() == 'TYPE':
+            rettype = self.expect('TYPE')[1]
+
         name = self.expect('ID')[1]
         self.expect('LPAREN')
         params = []
-        if self.peek() != 'RPAREN':
-            while True:
-                params.append(self.expect('ID')[1])
-                if self.peek() == 'COMMA':
-                    self.next()
-                    continue
-                break
-        self.expect('RPAREN')
+        while self.peek() != 'RPAREN':
+            # Set default param type to int if no type given
+            ptype = 'int'
+            if self.peek() == 'TYPE':
+                ptype = self.expect('TYPE')[1]
+            params.append((ptype, self.expect('ID')[1]))
+            if self.peek() == 'COMMA':
+                self.next()
+        self.next()  # Must be RPAREN
         self.expect('LBRACE')
         self.variables = set(params)
         body = []
         while self.peek() not in ('RBRACE', 'EOF'):
             body.append(self.statement())
         self.expect('RBRACE')
-        param_list = ', '.join(f'int {p}' for p in params)
-        result = f'int {name}({param_list}) {{\n'
-        result += '\n'.join(' ' * indent + '  ' + s for s in body)
+        param_list = ', '.join(f'{ptype} {pname}' for ptype, pname in params)
+        result = f'{rettype} {name}({param_list}) {{\n'
+        result += '\n'.join(' ' * indent + '    ' + s for s in body)
         if name == 'main':
-            result += f'{'\n' * (len(body) > 0)}  return 0;'
+            result += f'{'\n' * (len(body) > 0)}    return 0;'
         result += '\n}\n'
         return result
 
@@ -139,8 +155,8 @@ class Parser:
             then_body.append(self.statement())
         self.expect('RBRACE')
         code = f'if ({cond}) {{\n'
-        code += '\n'.join(' ' * indent + '  ' + s for s in then_body)
-        code += '\n}'
+        code += '\n'.join(' ' * indent + '    ' + s for s in then_body)
+        code += f'\n{' ' * indent}}}'
         if self.peek() == 'ELSE':
             self.next()
             self.expect('LBRACE')
@@ -149,8 +165,8 @@ class Parser:
                 else_body.append(self.statement())
             self.expect('RBRACE')
             code += ' else {\n'
-            code += '\n'.join('  ' + s for s in else_body)
-            code += '\n}'
+            code += '\n'.join(' ' * indent + '    ' + s for s in else_body)
+            code += f'\n{' ' * indent}}}'
         return code
 
     def while_stmt(self):
@@ -162,8 +178,8 @@ class Parser:
             body.append(self.statement())
         self.expect('RBRACE')
         code = f'while ({cond}) {{\n'
-        code += '\n'.join(' ' * indent + '  ' + s for s in body)
-        code += '\n}'
+        code += '\n'.join(' ' * indent + '    ' + s for s in body)
+        code += f'\n{' ' * indent}}}'
         return code
 
     def return_stmt(self):
@@ -175,8 +191,24 @@ class Parser:
     # ==============================================================
     # Expressions
     def expr(self):
+        result = self.compare()
+        while self.peek() in ('OR', 'AND'):
+            op = self.next()[1]
+            rhs = self.compare()
+            result = f'({result} {op} {rhs})'
+        return result
+
+    def compare(self):
+        result = self.arith()
+        while self.peek() in ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE'):
+            op = self.next()[1]
+            rhs = self.arith()
+            result = f'({result} {op} {rhs})'
+        return result
+
+    def arith(self):
         result = self.term()
-        while self.peek() in ('PLUS', 'MINUS', 'EQ', 'NE', 'LT', 'GT'):
+        while self.peek() in ('PLUS', 'MINUS'):
             op = self.next()[1]
             rhs = self.term()
             result = f'({result} {op} {rhs})'
@@ -193,6 +225,8 @@ class Parser:
     def factor(self):
         tok = self.next()
         if tok[0] == 'NUMBER':
+            return tok[1]
+        elif tok[0] == 'CHAR':
             return tok[1]
         elif tok[0] == 'ID':
             if self.peek() == 'LPAREN':
