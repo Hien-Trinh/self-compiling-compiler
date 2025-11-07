@@ -191,30 +191,33 @@ class Parser:
     # ==============================================================
     # Expressions
     def expr(self):
-        result = self.compare()
+        return self.logical()
+
+    def logical(self):
+        result = self.relational()
         while self.peek() in ('OR', 'AND'):
             op = self.next()[1]
-            rhs = self.compare()
+            rhs = self.relational()
             result = f'({result} {op} {rhs})'
         return result
 
-    def compare(self):
-        result = self.arith()
+    def relational(self):
+        result = self.additive()
         while self.peek() in ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE'):
             op = self.next()[1]
-            rhs = self.arith()
+            rhs = self.additive()
             result = f'({result} {op} {rhs})'
         return result
 
-    def arith(self):
-        result = self.term()
+    def additive(self):
+        result = self.multiplicative()
         while self.peek() in ('PLUS', 'MINUS'):
             op = self.next()[1]
-            rhs = self.term()
+            rhs = self.multiplicative()
             result = f'({result} {op} {rhs})'
         return result
 
-    def term(self):
+    def multiplicative(self):
         result = self.factor()
         while self.peek() in ('MUL', 'DIV'):
             op = self.next()[1]
