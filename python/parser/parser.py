@@ -60,7 +60,7 @@ class Parser:
         result = f'int {name}({param_list}) {{\n'
         result += '\n'.join(' ' * indent + '  ' + s for s in body)
         if name == 'main':
-            result += '\n  return 0;'
+            result += f'{'\n' * (len(body) > 0)}  return 0;'
         result += '\n}\n'
         return result
 
@@ -178,7 +178,7 @@ class Parser:
         result = self.term()
         while self.peek() in ('PLUS', 'MINUS', 'EQ', 'NE', 'LT', 'GT'):
             op = self.next()[1]
-            rhs = self.factor()
+            rhs = self.term()
             result = f'({result} {op} {rhs})'
         return result
 
