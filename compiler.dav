@@ -1,3 +1,7 @@
 ah main() {
-    boo(10);
+  beg x = 0;
+  while x < 5 {
+   boo(x);
+   x = x + 1;
+  }
 }

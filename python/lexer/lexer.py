@@ -42,8 +42,8 @@ def tokenize(code):
             continue
         elif kind == 'MISMATCH':
             # Handles unexpected characters
-            raise RuntimeError(
-                f'{value!r} unexpected on line {line_num} at column {column}')
+            raise SyntaxError(
+                f'Unexpected character {value!r} on line {line_num}')
 
         # Append the successfully matched token
         tokens.append(Token(kind, value, line_num, column))

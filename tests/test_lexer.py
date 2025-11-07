@@ -6,8 +6,8 @@ Reference: https://docs.python.org/3/library/re.html#writing-a-tokenizer
 """
 
 import unittest
-from interpreter.lexer.custom_token import Token
-from interpreter.lexer.lexer import tokenize
+from python.lexer.custom_token import Token
+from python.lexer.lexer import tokenize
 
 
 class TokenizerTest(unittest.TestCase):
@@ -109,8 +109,6 @@ class TokenizerTest(unittest.TestCase):
 
     def test_column_tracking_with_tabs(self):
         """Tests column tracking when mixing spaces and tabs (tabs are treated as a single space by SKIP)."""
-        # The column calculation (mo.start() - line_start + 1) correctly handles this.
-        # a (col 1), \t (skip), = (col 3), \t (skip), 1 (col 5)
         code = "a\t=\t1"
         expected = [
             Token('ID', 'a', 1, 0),
@@ -123,13 +121,13 @@ class TokenizerTest(unittest.TestCase):
     def test_mismatch_error(self):
         """Tests that an unexpected character raises the correct error."""
         code = "x = $ 10"
-        with self.assertRaisesRegex(RuntimeError, r"'\$' unexpected on line 1 at column 4"):
+        with self.assertRaisesRegex(SyntaxError, r"Unexpected character '\$' on line 1"):
             tokenize(code)
 
     def test_mismatch_error_multiline(self):
         """Tests that an unexpected character on a later line reports the correct line number."""
         code = "x = 10\n y @ 20"
-        with self.assertRaisesRegex(RuntimeError, r"'@' unexpected on line 2 at column 3"):
+        with self.assertRaisesRegex(SyntaxError, r"Unexpected character '@' on line 2"):
             tokenize(code)
 
 
