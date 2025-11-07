@@ -6,3 +6,6 @@
 
 # Unignore all dirs
 !*/
+
+# pycache
+__pycache__/
