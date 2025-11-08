@@ -1,0 +1,7 @@
+ah int main() {
+    beg char* a = "hello";
+    beg int b = 12345;
+    beg char* c = "world";
+    boo(a + " " + b + " " + c);
+    return 0;
+}

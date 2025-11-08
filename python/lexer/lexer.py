@@ -30,8 +30,15 @@ def tokenize(code):
         if kind == 'NUMBER':
             # Converts to float if decimal is present, otherwise integer
             value = float(value) if '.' in value else int(value)
-        elif kind == 'ID' and value in KEYWORDS:
-            kind = KEYWORDS[value]
+        elif kind == 'ID':
+            if value in KEYWORDS:
+                kind = KEYWORDS[value]
+            else:
+                pass
+        elif kind == 'TYPE':
+            pass
+        elif kind == 'STRING':
+            pass
         elif kind == 'NEWLINE':
             # Update line tracking variables and skip adding token
             line_start = mo.end()

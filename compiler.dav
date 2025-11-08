@@ -1,7 +1,32 @@
+ah is_letter(c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
+}
+
+ah is_digit(c) {
+    return c >= '0' && c <= '9';
+}
+
+ah is_space(char c) {
+    return c == ' ' || c == '\n' || c == '\t';
+}
+
+
+ah check_keywords(s, i, kw) {
+    beg x = 0;
+    boo(is_digit(x) + "hello");
+    return x;
+}
+
+
 ah main() {
-  beg x = 0;
-  while x < 5 {
-   boo(x);
-   x = (x + 1) * 3;
-  }
+    beg x = 0;
+    beg char y = 'a';
+    while x < 5 {
+        boo(x);
+        x = x + 1;
+        boo(y * x);
+        boo("yipee");
+    }
+
+    return 0;
 }
