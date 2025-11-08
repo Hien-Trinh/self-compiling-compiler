@@ -14,7 +14,6 @@ class Parser:
         self.tokens = tokens
         self.pos = 0
         self.fn_name = ""
-        self.ret_type = 'int'  # Set default return type to int if no type given
         self.variables = {}
         self.env = {}
 
@@ -53,12 +52,13 @@ class Parser:
         """
         indent = self.expect('FN')[3]
 
+        ret_type = 'int'  # Set default return type to int if no type given
         if self.peek() == 'TYPE':
-            self.ret_type = self.expect('TYPE')[1]
+            ret_type = self.expect('TYPE')[1]
         self.fn_name = self.expect('ID')[1]
 
         # Set global environment function
-        self.env[self.fn_name] = self.ret_type
+        self.env[self.fn_name] = ret_type
 
         self.expect('LPAREN')
         params = []
@@ -74,13 +74,13 @@ class Parser:
         self.next()  # Must be RPAREN
         self.expect('LBRACE')
         self.variables = {p: t for t, p in params}
-        self.variables[self.fn_name] = self.ret_type
+        self.variables[self.fn_name] = ret_type
         body = []
         while self.peek() not in ('RBRACE', 'EOF'):
             body.append(self.statement())
         self.expect('RBRACE')
         param_list = ', '.join(f'{ptype} {pname}' for ptype, pname in params)
-        result = f'{self.ret_type} {self.fn_name}({param_list}) {{\n'
+        result = f'{ret_type} {self.fn_name}({param_list}) {{\n'
         result += '\n'.join(' ' * indent + '    ' + s for s in body)
         result += '\n}\n'
         return result
@@ -219,9 +219,10 @@ class Parser:
     def return_stmt(self):
         line_num = self.expect('RETURN')[2]
         expr_type, expr = self.expr()
-        if expr_type != self.ret_type:
+        ret_type = self.env[self.fn_name]
+        if expr_type != ret_type:
             raise TypeError(
-                f'Incompatible {expr_type} to {self.ret_type} conversion, line {line_num}')
+                f'Incompatible {expr_type} to {ret_type} conversion, line {line_num}')
         self.expect('SEMICOL')
         return f'return {expr};'
 
