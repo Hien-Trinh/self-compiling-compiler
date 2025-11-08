@@ -13,9 +13,13 @@ class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
-        self.variables = set()
+        self.fn_name = ""
+        self.ret_type = 'int'  # Set default return type to int if no type given
+        self.variables = {}
+        self.env = {}
 
-    def peek(self): return self.tokens[self.pos][0]
+    def peek(self):
+        return self.tokens[self.pos][0]
 
     def next(self):
         tok = self.tokens[self.pos]
@@ -43,18 +47,19 @@ class Parser:
 
     def fn_decl(self):
         """
-        ah rettype name(int integer1, integer2, string str1) {
+        ah int name(int integer1, integer2, char* str1) {
             body;
         }
         """
         indent = self.expect('FN')[3]
 
-        # Set default return type to int if no type given
-        rettype = 'int'
         if self.peek() == 'TYPE':
-            rettype = self.expect('TYPE')[1]
+            self.ret_type = self.expect('TYPE')[1]
+        self.fn_name = self.expect('ID')[1]
 
-        name = self.expect('ID')[1]
+        # Set global environment function
+        self.env[self.fn_name] = self.ret_type
+
         self.expect('LPAREN')
         params = []
         while self.peek() != 'RPAREN':
@@ -65,18 +70,18 @@ class Parser:
             params.append((ptype, self.expect('ID')[1]))
             if self.peek() == 'COMMA':
                 self.next()
+
         self.next()  # Must be RPAREN
         self.expect('LBRACE')
-        self.variables = set(params)
+        self.variables = {p: t for t, p in params}
+        self.variables[self.fn_name] = self.ret_type
         body = []
         while self.peek() not in ('RBRACE', 'EOF'):
             body.append(self.statement())
         self.expect('RBRACE')
         param_list = ', '.join(f'{ptype} {pname}' for ptype, pname in params)
-        result = f'{rettype} {name}({param_list}) {{\n'
+        result = f'{self.ret_type} {self.fn_name}({param_list}) {{\n'
         result += '\n'.join(' ' * indent + '    ' + s for s in body)
-        if name == 'main':
-            result += f'{'\n' * (len(body) > 0)}    return 0;'
         result += '\n}\n'
         return result
 
@@ -101,27 +106,47 @@ class Parser:
             raise SyntaxError(f'Unexpected statement: {t}')
 
     def let_stmt(self):
-        self.expect('LET')
-        var_type = 'int'
+        line_num = self.expect('LET')[2]
+        # Set variable type to undefined as default
+        var_type = 'undefined'
         if self.peek() == 'TYPE':
             var_type = self.expect('TYPE')[1]
         var_name = self.expect('ID')[1]
         self.expect('ASSIGN')
-        expr = self.expr()
+
+        # Dynamically set type to expression type
+        expr_type, expr = self.expr()
+        if var_type != 'undefined' and var_type != expr_type:
+            raise TypeError(
+                f'Incompatible {expr_type} to {var_type} conversion, line {line_num}')
+        var_type = expr_type
+
         self.expect('SEMICOL')
         if var_name in self.variables:
-            return f'{var_name} = {expr};'
+            if var_type == self.variables[var_name]:
+                return f'{var_name} = {expr};'
+            else:
+                raise TypeError(
+                    f'Redefinition of \'{var_name}\' with a different type: \'{var_type}\' vs \'{self.variables[var_name]}\', line {line_num}')
         else:
-            self.variables.add(var_name)
+            self.variables[var_name] = var_type
             return f'{var_type} {var_name} = {expr};'
 
     def print_stmt(self):
-        self.expect('PRINT')
+        line_num = self.expect('PRINT')[2]
         self.expect('LPAREN')
-        expr = self.expr()
+        expr_type, expr = self.expr()
         self.expect('RPAREN')
         self.expect('SEMICOL')
-        return f'printf("%d\\n", {expr});'
+        if expr_type == 'int':
+            return f'printf("%d\\n", {expr});'
+        elif expr_type == 'char':
+            return f'printf("%c\\n", {expr});'
+        elif expr_type == 'char*':
+            return f'printf("%s\\n", {expr});'
+        else:
+            raise TypeError(
+                f'Unprintable expression of type: {expr_type}, line {line_num}')
 
     def id_stmt(self):
         expect = self.expect('ID')
@@ -135,7 +160,7 @@ class Parser:
 
         if self.peek() == 'ASSIGN':
             self.next()
-            expr = self.expr()
+            expr_type, expr = self.expr()
             self.expect('SEMICOL')
             return f'{name} = {expr};'
         elif self.peek() == 'LPAREN':
@@ -143,7 +168,7 @@ class Parser:
             args = []
             if self.peek() != 'RPAREN':
                 while True:
-                    args.append(self.expr())
+                    args.append(self.expr()[1])
                     if self.peek() == 'COMMA':
                         self.next()
                         continue
@@ -157,7 +182,7 @@ class Parser:
 
     def if_stmt(self):
         indent = self.expect('IF')[3]
-        cond = self.expr()
+        cond = self.expr()[1]
         self.expect('LBRACE')
         then_body = []
         while self.peek() not in ('RBRACE', 'EOF'):
@@ -180,7 +205,7 @@ class Parser:
 
     def while_stmt(self):
         indent = self.expect('WHILE')[3]
-        cond = self.expr()
+        cond = self.expr()[1]
         self.expect('LBRACE')
         body = []
         while self.peek() not in ('RBRACE', 'EOF'):
@@ -192,13 +217,17 @@ class Parser:
         return code
 
     def return_stmt(self):
-        self.expect('RETURN')
-        expr = self.expr()
+        line_num = self.expect('RETURN')[2]
+        expr_type, expr = self.expr()
+        if expr_type != self.ret_type:
+            raise TypeError(
+                f'Incompatible {expr_type} to {self.ret_type} conversion, line {line_num}')
         self.expect('SEMICOL')
         return f'return {expr};'
 
     # ==============================================================
     # Expressions
+    # returns type, value
     def expr(self):
         return self.logical()
 
@@ -206,57 +235,66 @@ class Parser:
         result = self.relational()
         while self.peek() in ('OR', 'AND'):
             op = self.next()[1]
-            rhs = self.relational()
-            result = f'({result} {op} {rhs})'
+            rhs = self.relational()[1]
+            result = ('int', f'({result[1]} {op} {rhs})')
         return result
 
     def relational(self):
         result = self.additive()
         while self.peek() in ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE'):
             op = self.next()[1]
-            rhs = self.additive()
-            result = f'({result} {op} {rhs})'
+            rhs = self.additive()[1]
+            result = ('int', f'({result[1]} {op} {rhs})')
         return result
 
     def additive(self):
         result = self.multiplicative()
         while self.peek() in ('PLUS', 'MINUS'):
             op = self.next()[1]
-            rhs = self.multiplicative()
-            result = f'({result} {op} {rhs})'
+            rhs = self.multiplicative()[1]
+            result = ('int', f'({result[1]} {op} {rhs})')
         return result
 
     def multiplicative(self):
         result = self.factor()
-        while self.peek() in ('MUL', 'DIV'):
+        while self.peek() in ('MUL', 'DIV') and result[0]:
             op = self.next()[1]
-            rhs = self.factor()
-            result = f'({result} {op} {rhs})'
+            rhs = self.factor()[1]
+            result = ('int', f'({result[1]} {op} {rhs})')
         return result
 
     def factor(self):
         tok = self.next()
+        line_num = tok[2]
         if tok[0] == 'NUMBER':
-            return tok[1]
+            return ('int', tok[1])
         elif tok[0] == 'CHAR':
-            return tok[1]
+            return ('char', tok[1])
+        elif tok[0] == 'STRING':
+            return ('char*', tok[1])
         elif tok[0] == 'ID':
             if self.peek() == 'LPAREN':
+                if tok[1] not in self.env:
+                    raise ReferenceError(
+                        f'Call to undeclared function \'{tok[1]}\', line {line_num}')
                 self.next()
                 args = []
                 if self.peek() != 'RPAREN':
-                    args.append(self.expr())
+                    args.append(self.expr()[1])
                     while self.peek() == 'COMMA':
                         self.next()
-                        args.append(self.expr())
+                        args.append(self.expr()[1])
                 self.expect('RPAREN')
-                return f'{tok[1]}({", ".join(args)})'
+                return (self.env[tok[1]], f'{tok[1]}({", ".join(args)})')
             else:
-                return tok[1]
+                if tok[1] not in self.variables:
+                    raise ReferenceError(
+                        f'Use of undeclared identifier \'{tok[1]}\', line {line_num}')
+                return (self.variables[tok[1]], tok[1])
         elif tok[0] == 'LPAREN':
-            expr = self.expr()
+            expr_type, expr = self.expr()
             self.expect('RPAREN')
-            return expr
+            return (expr_type, expr)
         else:
             raise SyntaxError(
                 f'Unexpected token in factor: {tok}, line {tok[2]}')

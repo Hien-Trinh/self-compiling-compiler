@@ -16,7 +16,7 @@ class Token(NamedTuple):
 
 
 TOKEN_SPEC = [
-    ('TYPE',      r'(int|string|char|void)'),
+    ('TYPE',      r'(int|char\*|char|void)'),
     ('STRING',    r'"([^"\\]|\\.)*"'),  # Double quoted string
     ('CHAR',      r"'(\\.|[^\\'])'"),
     ('NUMBER',    r'\d+(\.\d*)?'),  # Integer or decimal number
@@ -33,6 +33,8 @@ TOKEN_SPEC = [
     ('RPAREN',    r'\)'),
     ('LBRACE',    r'\{'),
     ('RBRACE',    r'\}'),
+    ('LSQUARE',   r'\['),
+    ('RSQUARE',   r'\]'),
     ('PLUS',      r'\+'),
     ('MINUS',     r'-'),
     ('MUL',       r'\*'),
@@ -55,5 +57,8 @@ KEYWORDS = {
     'if': 'IF',
     'else': 'ELSE',
     'while': 'WHILE',
-    'return': 'RETURN'
+    'return': 'RETURN',
+    'int': 'INT',
+    'char': 'CHAR',
+    'void': 'VOID',
 }
