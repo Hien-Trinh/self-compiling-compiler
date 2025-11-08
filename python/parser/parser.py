@@ -177,7 +177,7 @@ class Parser:
             args = []
             if self.peek() != 'RPAREN':
                 while True:
-                    args.append(self.expr()[1])
+                    args.append(str(self.expr()[1]))
                     if self.peek() == 'COMMA':
                         self.next()
                         continue
@@ -242,12 +242,12 @@ class Parser:
         return self.logical()
 
     def logical(self):
-        result = self.relational()
+        res_type, result = self.relational()
         while self.peek() in ('OR', 'AND'):
             op = self.next()[1]
             rhs = self.relational()[1]
-            result = ('int', f'({result[1]} {op} {rhs})')
-        return result
+            res_type, result = 'int', f'({result[1]} {op} {rhs})'
+        return res_type, result
 
     def relational(self):
         res_type, result = self.additive()
@@ -283,7 +283,7 @@ class Parser:
 
     def multiplicative(self):
         res_type, result = self.factor()
-        while self.peek() in ('MUL', 'DIV') and result[0]:
+        while self.peek() in ('MUL', 'DIV'):
             op = self.next()[1]
             rhs_type, rhs = self.factor()
             if res_type == 'char*' or rhs_type == 'char*':
@@ -312,7 +312,7 @@ class Parser:
                     args.append(self.expr()[1])
                     while self.peek() == 'COMMA':
                         self.next()
-                        args.append(self.expr()[1])
+                        args.append(str(self.expr()[1]))
                 self.expect('RPAREN')
                 return self.env[tok[1]], f'{tok[1]}({", ".join(args)})'
             else:
