@@ -71,10 +71,9 @@ class Parser:
             if self.peek() == 'COMMA':
                 self.next()
 
-        self.next()  # Must be RPAREN
+        self.expect('RPAREN')
         self.expect('LBRACE')
         self.variables = {p: t for t, p in params}
-        self.variables[self.fn_name] = ret_type
         body = []
         while self.peek() not in ('RBRACE', 'EOF'):
             body.append(self.statement())
@@ -153,18 +152,28 @@ class Parser:
         name = expect[1]
         line_num = expect[2]
 
-        # Check if ID declared
-        if name not in self.variables:
-            raise SyntaxError(
-                f'Undeclared identifier, {name}, line {line_num}')
-
         if self.peek() == 'ASSIGN':
             self.next()
+            # Check for assignment: MUST be in local variables
+            if name not in self.variables:
+                raise SyntaxError(
+                    f'Undeclared identifier, {name}, line {line_num}')
+
             expr_type, expr = self.expr()
+            if self.variables[name] != expr_type:
+                raise TypeError(
+                    f'Incompatible {expr_type} to {self.variables[name]} conversion, line {line_num}')
+
             self.expect('SEMICOL')
             return f'{name} = {expr};'
+
         elif self.peek() == 'LPAREN':
             self.next()
+            # Check for function call: MUST be in global environment
+            if name not in self.env:
+                raise ReferenceError(
+                    f'Call to undeclared function \'{name}\', line {line_num}')
+
             args = []
             if self.peek() != 'RPAREN':
                 while True:
@@ -245,10 +254,16 @@ class Parser:
         while self.peek() in ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE'):
             op = self.next()[1]
             rhs_type, rhs = self.additive()
-            if res_type == 'char*' or rhs_type == 'char*':
+            if res_type == 'char*' and rhs_type == 'char*':
+                if op == "==":
+                    result = 'int', f'(strcmp({result}, {rhs}) == 0)'
+                elif op == '!=':
+                    result = 'int', f'(strcmp({result}, {rhs}) != 0)'
+            elif res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
                     f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
-            result = 'int', f'({result} {op} {rhs})'
+            else:
+                res_type, result = 'int', f'({result} {op} {rhs})'
         return res_type, result
 
     def additive(self):
@@ -326,7 +341,7 @@ class Parser:
         expr_type, expr = var
         if expr_type == 'int':
             return f'itos({expr})'
-        elif expr_type == 'int':
+        elif expr_type == 'char':
             return f'ctos({expr})'
         elif expr_type == 'char*':
             return expr
