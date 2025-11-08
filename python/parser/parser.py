@@ -17,26 +17,26 @@ class Parser:
         self.variables = {}
         self.env = {}
 
+    # Returns kind of the next token
     def peek(self):
         return self.tokens[self.pos][0]
 
+    # Returns current token, moves pointer forward
     def next(self):
         tok = self.tokens[self.pos]
         self.pos += 1
         return tok
 
+    # Check kind if expected, returns current token, moves pointer forward
     def expect(self, kind):
         tok = self.next()
         if tok[0] != kind:
             raise SyntaxError(f'Expected {kind}, got {tok}, line {tok[2]}')
         return tok
 
+    # Essential C, parse till EOF
     def parse(self):
-        code = [
-            '#include <stdio.h>',
-            '#include <string.h>',
-            ''
-        ]
+        code = []
         while self.peek() != 'EOF':
             code.append(self.fn_decl())
         return '\n'.join(code)
@@ -249,30 +249,40 @@ class Parser:
         return result
 
     def additive(self):
-        result = self.multiplicative()
+        res_type, result = self.multiplicative()
         while self.peek() in ('PLUS', 'MINUS'):
             op = self.next()[1]
-            rhs = self.multiplicative()[1]
-            result = ('int', f'({result[1]} {op} {rhs})')
-        return result
+            rhs_type, rhs = self.multiplicative()
+            if res_type == 'char*' or rhs_type == 'char*':
+                if op == "+":
+                    res_type, result = 'char*', f'({self.string_plus((res_type, result), (rhs_type, rhs))})'
+                else:
+                    raise TypeError(
+                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+            else:
+                res_type, result = 'int', f'({result} {op} {rhs})'
+        return res_type, result
 
     def multiplicative(self):
-        result = self.factor()
+        res_type, result = self.factor()
         while self.peek() in ('MUL', 'DIV') and result[0]:
             op = self.next()[1]
-            rhs = self.factor()[1]
-            result = ('int', f'({result[1]} {op} {rhs})')
-        return result
+            rhs_type, rhs = self.factor()
+            if res_type == 'char*' or rhs_type == 'char*':
+                raise TypeError(
+                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+            res_type, result = 'int', f'({result} {op} {rhs})'
+        return res_type, result
 
     def factor(self):
         tok = self.next()
         line_num = tok[2]
         if tok[0] == 'NUMBER':
-            return ('int', tok[1])
+            return 'int', tok[1]
         elif tok[0] == 'CHAR':
-            return ('char', tok[1])
+            return 'char', tok[1]
         elif tok[0] == 'STRING':
-            return ('char*', tok[1])
+            return 'char*', tok[1]
         elif tok[0] == 'ID':
             if self.peek() == 'LPAREN':
                 if tok[1] not in self.env:
@@ -286,16 +296,34 @@ class Parser:
                         self.next()
                         args.append(self.expr()[1])
                 self.expect('RPAREN')
-                return (self.env[tok[1]], f'{tok[1]}({", ".join(args)})')
+                return self.env[tok[1]], f'{tok[1]}({", ".join(args)})'
             else:
                 if tok[1] not in self.variables:
                     raise ReferenceError(
                         f'Use of undeclared identifier \'{tok[1]}\', line {line_num}')
-                return (self.variables[tok[1]], tok[1])
+                return self.variables[tok[1]], tok[1]
         elif tok[0] == 'LPAREN':
             expr_type, expr = self.expr()
             self.expect('RPAREN')
-            return (expr_type, expr)
+            return expr_type, expr
         else:
             raise SyntaxError(
                 f'Unexpected token in factor: {tok}, line {tok[2]}')
+
+    # ==============================================================
+    # Utils
+
+    def string_plus(self, a, b):
+        str_a = self.to_string(a)
+        str_b = self.to_string(b)
+        output = f'concat({str_a}, {str_b})'
+        return output
+
+    def to_string(self, var):
+        expr_type, expr = var
+        if expr_type == 'int':
+            return f'itos({expr})'
+        elif expr_type == 'int':
+            return f'ctos({expr})'
+        elif expr_type == 'char*':
+            return expr

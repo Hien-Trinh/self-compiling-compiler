@@ -6,14 +6,14 @@ ah is_digit(c) {
     return c >= '0' && c <= '9';
 }
 
-ah is_space(char* c) {
+ah is_space(char c) {
     return c == ' ' || c == '\n' || c == '\t';
 }
 
 
 ah check_keywords(s, i, kw) {
     beg x = 0;
-    boo(is_digit(x));
+    boo(is_digit(x) + "hello");
     return x;
 }
 
