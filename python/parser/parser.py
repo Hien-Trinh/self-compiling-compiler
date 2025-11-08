@@ -241,12 +241,15 @@ class Parser:
         return result
 
     def relational(self):
-        result = self.additive()
+        res_type, result = self.additive()
         while self.peek() in ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE'):
             op = self.next()[1]
-            rhs = self.additive()[1]
-            result = ('int', f'({result[1]} {op} {rhs})')
-        return result
+            rhs_type, rhs = self.additive()
+            if res_type == 'char*' or rhs_type == 'char*':
+                raise TypeError(
+                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+            result = 'int', f'({result} {op} {rhs})'
+        return res_type, result
 
     def additive(self):
         res_type, result = self.multiplicative()

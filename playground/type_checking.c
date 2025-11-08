@@ -9,7 +9,7 @@ int main() {
     char* a = "hello";
     int b = 12345;
     char* c = "world";
-    printf("%s\n", (concat((concat(a, itos(b))), c)));
+    printf("%s\n", (concat((concat((concat((concat(a, " ")), itos(b))), " ")), c)));
     return 0;
 }
 
