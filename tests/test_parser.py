@@ -101,6 +101,26 @@ class TestParser(unittest.TestCase):
         )
         self.assertEqual(parser.parse(), expected_code)
 
+    def test_parse_fn_with_array_param(self):
+        tokens = [
+            ('FN', 'ah', 1, 0), ('ID', 'get_first',
+                                 1, 0), ('LPAREN', '(', 1, 0),
+            ('TYPE', 'int*', 1, 0), ('ID', 'arr', 1, 0),
+            ('RPAREN', ')', 1, 0), ('LBRACE', '{', 1, 0),
+            ('RETURN', 'return', 2, 4), ('ID',
+                                         'arr', 2, 4), ('LSQUARE', '[', 2, 4),
+            ('NUMBER', 0, 2, 4), ('RSQUARE', ']', 2, 4), ('SEMICOL', ';', 2, 4),
+            ('RBRACE', '}', 3, 0),
+            self.eof_token
+        ]
+        parser = Parser(tokens)
+        expected_code = (
+            'int get_first(int* arr) {\n'
+            '    return arr[0];\n'
+            '}\n'
+        )
+        self.assertEqual(parser.parse(), expected_code)
+
     # --- Statement Tests (Updated) ---
 
     def test_let_statement_new_var(self):
@@ -153,8 +173,8 @@ class TestParser(unittest.TestCase):
             ('RBRACE', '}', 2, 0)
         ]
         parser = Parser(tokens)
-        # For the new parser, 'func' must be in variables (a quirk) and 'z' must be defined
-        parser.variables = {'func': 'int', 'z': 'int'}
+        # z is a local variable, func is in the global env
+        parser.variables = {'z': 'int'}
         parser.env = {'func': 'int'}
 
         self.assertEqual(parser.statement(), 'func(5, z);')
@@ -222,8 +242,7 @@ class TestParser(unittest.TestCase):
             ('RBRACE', '}', 6, 0)
         ]
         parser = Parser(tokens)
-        # Note: 'y' is defined *inside* the if, so it's not in the outer scope
-        # The test must be modified. Let's assume 'y' was defined before.
+        # y is pre-defined
         parser.variables = {'x': 'int', 'y': 'int'}
         expected_code = (
             'if ((x > 0)) {\n'
@@ -284,7 +303,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         self.assertEqual(parser.expr(), ('int', '((1 + 2) * 3)'))
 
-    def test_expression_fn_call_factor(self):
+    def test_expression_fn_call_atom(self):
         tokens = [
             ('ID', 'call', 1, 0), ('LPAREN', '(', 1, 0),
             ('ID', 'a', 1, 0), ('COMMA', ',', 1, 0),
@@ -295,7 +314,8 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         parser.variables = {'a': 'int', 'b': 'int'}
         parser.env = {'call': 'int'}
-        self.assertEqual(parser.factor(), ('int', 'call(a, 10, (b + 5))'))
+        # Test atom() (formerly factor())
+        self.assertEqual(parser.atom(), ('int', 'call(a, 10, (b + 5))'))
 
     # --- NEW: String and Type Tests ---
 
@@ -380,6 +400,135 @@ class TestParser(unittest.TestCase):
         self.assertEqual(
             parser.expr(), ('char*', '(concat(itos(10), " bottles"))'))
 
+    # --- NEW: Array Tests ---
+
+    def test_let_array_declaration(self):
+        tokens = [
+            ('LET', 'beg', 1, 4), ('TYPE', 'int', 1, 4), ('ID', 'my_arr', 1, 4),
+            ('LSQUARE', '[', 1, 4), ('NUMBER',
+                                     10, 1, 4), ('RSQUARE', ']', 1, 4),
+            ('SEMICOL', ';', 1, 4), ('RBRACE', '}', 2, 0)
+        ]
+        parser = Parser(tokens)
+        parser.variables = {}
+        self.assertEqual(parser.statement(), 'int my_arr[10];')
+        # Check that the type is stored as a pointer
+        self.assertEqual(parser.variables['my_arr'], 'int*')
+
+    def test_id_stmt_array_assignment(self):
+        tokens = [
+            ('ID', 'my_arr', 1, 4), ('LSQUARE',
+                                     '[', 1, 4), ('NUMBER', 0, 1, 4),
+            ('RSQUARE', ']', 1, 4), ('ASSIGN', '=', 1, 4), ('NUMBER', 5, 1, 4),
+            ('SEMICOL', ';', 1, 4), ('RBRACE', '}', 2, 0)
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'my_arr': 'int*'}  # Array must be pre-defined
+        self.assertEqual(parser.statement(), 'my_arr[0] = 5;')
+
+    def test_atom_array_access(self):
+        tokens = [
+            ('ID', 'my_arr', 1, 4), ('LSQUARE',
+                                     '[', 1, 4), ('NUMBER', 0, 1, 4),
+            ('RSQUARE', ']', 1, 4), ('SEMICOL', ';', 1, 4)
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'my_arr': 'int*'}
+        # Test the atom() (formerly factor()) part
+        # It should return the base type ('int') and the C code
+        self.assertEqual(parser.atom(), ('int', 'my_arr[0]'))
+
+    def test_expr_array_access(self):
+        tokens = [
+            ('ID', 'my_arr', 1, 4), ('LSQUARE',
+                                     '[', 1, 4), ('NUMBER', 0, 1, 4),
+            ('RSQUARE', ']', 1, 4), ('PLUS', '+', 1, 4), ('NUMBER', 1, 1, 4),
+            ('SEMICOL', ';', 1, 4)
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'my_arr': 'int*'}
+        self.assertEqual(parser.expr(), ('int', '(my_arr[0] + 1)'))
+
+    def test_error_let_array_no_type(self):
+        tokens = [
+            ('LET', 'beg', 1, 4), ('ID', 'my_arr',
+                                   1, 4), ('LSQUARE', '[', 1, 4),
+            ('NUMBER', 10, 1, 4), ('RSQUARE', ']', 1, 4), ('SEMICOL', ';', 1, 4),
+        ]
+        parser = Parser(tokens)
+        parser.variables = {}
+        with self.assertRaises(SyntaxError) as cm:
+            parser.statement()
+        self.assertIn("must have an explicit type", str(cm.exception))
+
+    def test_error_let_array_invalid_size(self):
+        tokens = [
+            ('LET', 'beg', 1, 4), ('TYPE', 'int', 1, 4), ('ID', 'my_arr', 1, 4),
+            ('LSQUARE', '[', 1, 4), ('NUMBER',
+                                     0, 1, 4), ('RSQUARE', ']', 1, 4),
+            ('SEMICOL', ';', 1, 4),
+        ]
+        parser = Parser(tokens)
+        parser.variables = {}
+        with self.assertRaises(SyntaxError) as cm:
+            parser.statement()
+        self.assertIn("must be a positive integer", str(cm.exception))
+
+    def test_error_id_stmt_array_type_mismatch(self):
+        tokens = [
+            ('ID', 'my_arr', 1, 4), ('LSQUARE',
+                                     '[', 1, 4), ('NUMBER', 0, 1, 4),
+            ('RSQUARE', ']', 1, 4), ('ASSIGN', '=',
+                                     1, 4), ('STRING', '"hello"', 1, 4),
+            ('SEMICOL', ';', 1, 4),
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'my_arr': 'int*'}
+        with self.assertRaises(TypeError) as cm:
+            parser.statement()
+        self.assertIn(
+            "cannot assign char* to array element of type int", str(cm.exception))
+
+    def test_error_id_stmt_array_bad_index(self):
+        tokens = [
+            ('ID', 'my_arr', 1, 4), ('LSQUARE',
+                                     '[', 1, 4), ('STRING', '"a"', 1, 4),
+            ('RSQUARE', ']', 1, 4), ('ASSIGN', '=', 1, 4), ('NUMBER', 5, 1, 4),
+            ('SEMICOL', ';', 1, 4),
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'my_arr': 'int*'}
+        with self.assertRaises(TypeError) as cm:
+            parser.statement()
+        self.assertIn("Array index must be an integer", str(cm.exception))
+
+    def test_error_id_stmt_indexing_non_array(self):
+        tokens = [
+            ('ID', 'my_var', 1, 4), ('LSQUARE',
+                                     '[', 1, 4), ('NUMBER', 0, 1, 4),
+            ('RSQUARE', ']', 1, 4), ('ASSIGN', '=', 1, 4), ('NUMBER', 5, 1, 4),
+            ('SEMICOL', ';', 1, 4),
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'my_var': 'int'}  # my_var is an int, not int*
+        with self.assertRaises(TypeError) as cm:
+            parser.statement()
+        self.assertIn("is not an array and cannot be indexed",
+                      str(cm.exception))
+
+    def test_error_atom_indexing_non_array(self):
+        tokens = [
+            ('ID', 'my_var', 1, 4), ('LSQUARE',
+                                     '[', 1, 4), ('NUMBER', 0, 1, 4),
+            ('RSQUARE', ']', 1, 4), ('SEMICOL', ';', 1, 4)
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'my_var': 'int'}  # my_var is an int, not int*
+        with self.assertRaises(TypeError) as cm:
+            parser.atom()
+        self.assertIn("is not an array and cannot be indexed",
+                      str(cm.exception))
+
     # --- Error Handling Tests (Updated and New) ---
 
     def test_invalid_statement(self):
@@ -398,13 +547,13 @@ class TestParser(unittest.TestCase):
         self.assertIn("Invalid statement start: myvar, line 1",
                       str(cm.exception))
 
-    def test_expression_error_in_factor(self):
+    def test_expression_error_in_atom(self):
         tokens = [('PLUS', '+', 1, 0), self.eof_token]
         parser = Parser(tokens)
         with self.assertRaises(SyntaxError) as cm:
-            parser.expr()
+            parser.expr()  # This will fail down in atom()
         self.assertIn(
-            "Unexpected token in factor: ('PLUS', '+', 1, 0)", str(cm.exception))
+            "Unexpected token in atom: ('PLUS', '+', 1, 0)", str(cm.exception))
 
     def test_type_mismatch_let(self):
         tokens = [
@@ -471,7 +620,7 @@ class TestParser(unittest.TestCase):
         parser.env = {}
         with self.assertRaises(ReferenceError) as cm:
             parser.statement()
-        # This fails the 'factor' check
+        # This fails the 'atom' check
         self.assertIn(
             "Call to undeclared function 'no_such_func'", str(cm.exception))
 

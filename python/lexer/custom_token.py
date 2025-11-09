@@ -16,7 +16,7 @@ class Token(NamedTuple):
 
 
 TOKEN_SPEC = [
-    ('TYPE',      r'(int|char\*|char|void)'),
+    ('TYPE',      r'(int\*|char\*|int|char|void)'),
     ('STRING',    r'"([^"\\]|\\.)*"'),  # Double quoted string
     ('CHAR',      r"'(\\.|[^\\'])'"),
     ('NUMBER',    r'\d+(\.\d*)?'),  # Integer or decimal number

@@ -110,42 +110,78 @@ class Parser:
         var_type = 'undefined'
         if self.peek() == 'TYPE':
             var_type = self.expect('TYPE')[1]
+
         var_name = self.expect('ID')[1]
-        self.expect('ASSIGN')
+        if self.peek() == 'ASSIGN':
+            # Variable assignment
+            # e.g., beg x = 10; beg char* y = "howdie"
+            self.next()
 
-        # Dynamically set type to expression type
-        expr_type, expr = self.expr()
-        if var_type != 'undefined' and var_type != expr_type:
-            raise TypeError(
-                f'Incompatible {expr_type} to {var_type} conversion, line {line_num}')
-        var_type = expr_type
-
-        self.expect('SEMICOL')
-        if var_name in self.variables:
-            if var_type == self.variables[var_name]:
-                return f'{var_name} = {expr};'
-            else:
+            # Dynamically set type to expression type
+            rhs_type, rhs_expr = self.expr()
+            if var_type == 'undefined':
+                var_type = rhs_type  # Infer type
+            elif var_type != rhs_type:
                 raise TypeError(
-                    f'Redefinition of \'{var_name}\' with a different type: \'{var_type}\' vs \'{self.variables[var_name]}\', line {line_num}')
+                    f'Incompatible {rhs_type} to {var_type} conversion, line {line_num}')
+
+            self.expect('SEMICOL')
+            if var_name in self.variables:
+                if self.variables[var_name] == var_type:
+                    return f'{var_name} = {rhs_expr};'
+                else:
+                    raise TypeError(
+                        f'Redefinition of \'{var_name}\' with a different type: \'{var_type}\' vs \'{self.variables[var_name]}\', line {line_num}')
+            else:
+                self.variables[var_name] = var_type
+                return f'{var_type} {var_name} = {rhs_expr};'
+
+        elif self.peek() == 'LSQUARE':
+            # Array declaration
+            # e.g., beg int x[10];
+            self.next()
+            if var_type == 'undefined':
+                raise SyntaxError(
+                    f'Array declaration must have an explicit type, line {line_num}')
+
+            size = self.expect('NUMBER')[1]
+            if not isinstance(size, int) or size < 1:
+                raise SyntaxError(
+                    f'Array size must be a positive integer, got {size}, line {line_num}')
+
+            self.expect('RSQUARE')
+            self.expect('SEMICOL')
+
+            if var_name in self.variables:
+                raise TypeError(
+                    f'Redefinition of \'{var_name}\', line {line_num}')
+
+            # Store array type as 'base_type*' (e.g., 'int*')
+            array_type = var_type + '*'
+            self.variables[var_name] = array_type
+
+            # C code for array declaration
+            return f'{var_type} {var_name}[{size}];'
+
         else:
-            self.variables[var_name] = var_type
-            return f'{var_type} {var_name} = {expr};'
+            raise SyntaxError(
+                f'Expected \'=\' or \'[\' after identifier in let statement, line {line_num}')
 
     def print_stmt(self):
         line_num = self.expect('PRINT')[2]
         self.expect('LPAREN')
-        expr_type, expr = self.expr()
+        message_type, message_expr = self.expr()
         self.expect('RPAREN')
         self.expect('SEMICOL')
-        if expr_type == 'int':
-            return f'printf("%d\\n", {expr});'
-        elif expr_type == 'char':
-            return f'printf("%c\\n", {expr});'
-        elif expr_type == 'char*':
-            return f'printf("%s\\n", {expr});'
+        if message_type == 'int':
+            return f'printf("%d\\n", {message_expr});'
+        elif message_type == 'char':
+            return f'printf("%c\\n", {message_expr});'
+        elif message_type == 'char*':
+            return f'printf("%s\\n", {message_expr});'
         else:
             raise TypeError(
-                f'Unprintable expression of type: {expr_type}, line {line_num}')
+                f'Unprintable expression of type: {message_type}, line {line_num}')
 
     def id_stmt(self):
         expect = self.expect('ID')
@@ -153,21 +189,23 @@ class Parser:
         line_num = expect[2]
 
         if self.peek() == 'ASSIGN':
+            # Variable assignment
             self.next()
             # Check for assignment: MUST be in local variables
             if name not in self.variables:
                 raise SyntaxError(
                     f'Undeclared identifier, {name}, line {line_num}')
 
-            expr_type, expr = self.expr()
-            if self.variables[name] != expr_type:
+            rhs_type, rhs_expr = self.expr()
+            if self.variables[name] != rhs_type:
                 raise TypeError(
-                    f'Incompatible {expr_type} to {self.variables[name]} conversion, line {line_num}')
+                    f'Incompatible {rhs_type} to {self.variables[name]} conversion, line {line_num}')
 
             self.expect('SEMICOL')
-            return f'{name} = {expr};'
+            return f'{name} = {rhs_expr};'
 
         elif self.peek() == 'LPAREN':
+            # Function call
             self.next()
             # Check for function call: MUST be in global environment
             if name not in self.env:
@@ -176,15 +214,48 @@ class Parser:
 
             args = []
             if self.peek() != 'RPAREN':
-                while True:
+                args.append(str(self.expr()[1]))
+                while self.peek() == 'COMMA':
+                    self.next()
                     args.append(str(self.expr()[1]))
-                    if self.peek() == 'COMMA':
-                        self.next()
-                        continue
-                    break
+
             self.expect('RPAREN')
             self.expect('SEMICOL')
             return f'{name}({", ".join(args)});'
+
+        elif self.peek() == 'LSQUARE':
+            # Array assignment
+            self.next()
+
+            if name not in self.variables:
+                raise ReferenceError(
+                    f'Use of undeclared identifier \'{name}\', line {line_num}')
+
+            # Check type. Must be a pointer type, e.g., 'int*'
+            var_type = self.variables[name]
+            if not var_type[-1] == '*':
+                raise TypeError(
+                    f'Variable \'{name}\' is not an array and cannot be indexed, line {line_num}')
+
+            # Get index expression
+            index_type, index_expr = self.expr()
+            if index_type != 'int':
+                raise TypeError(
+                    f'Array index must be an integer, got {index_type}, line {line_num}')
+
+            self.expect('RSQUARE')
+            self.expect('ASSIGN')
+
+            rhs_type, rhs_expr = self.expr()
+            # Type check the assignment
+            base_type = var_type[:-1]
+            if base_type != rhs_type:
+                raise TypeError(
+                    f'Incompatible types: cannot assign {rhs_type} to array element of type {base_type}, line {line_num}')
+
+            self.expect('SEMICOL')
+            return f'{name}[{index_expr}] = {rhs_expr};'
+
         else:
             raise SyntaxError(
                 f'Invalid statement start: {name}, line {line_num}')
@@ -227,13 +298,13 @@ class Parser:
 
     def return_stmt(self):
         line_num = self.expect('RETURN')[2]
-        expr_type, expr = self.expr()
+        rhs_type, rhs_expr = self.expr()
         ret_type = self.env[self.fn_name]
-        if expr_type != ret_type:
+        if rhs_type != ret_type:
             raise TypeError(
-                f'Incompatible {expr_type} to {ret_type} conversion, line {line_num}')
+                f'Incompatible {rhs_type} to {ret_type} conversion, line {line_num}')
         self.expect('SEMICOL')
-        return f'return {expr};'
+        return f'return {rhs_expr};'
 
     # ==============================================================
     # Expressions
@@ -282,51 +353,81 @@ class Parser:
         return res_type, result
 
     def multiplicative(self):
-        res_type, result = self.factor()
+        res_type, result = self.atom()
         while self.peek() in ('MUL', 'DIV'):
             op = self.next()[1]
-            rhs_type, rhs = self.factor()
+            rhs_type, rhs = self.atom()
             if res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
                     f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
             res_type, result = 'int', f'({result} {op} {rhs})'
         return res_type, result
 
-    def factor(self):
+    def atom(self):
         tok = self.next()
+        var_name = tok[1]
         line_num = tok[2]
         if tok[0] == 'NUMBER':
-            return 'int', tok[1]
+            return 'int', var_name
         elif tok[0] == 'CHAR':
-            return 'char', tok[1]
+            return 'char', var_name
         elif tok[0] == 'STRING':
-            return 'char*', tok[1]
+            return 'char*', var_name
         elif tok[0] == 'ID':
             if self.peek() == 'LPAREN':
-                if tok[1] not in self.env:
+                # Function call
+                if var_name not in self.env:
                     raise ReferenceError(
-                        f'Call to undeclared function \'{tok[1]}\', line {line_num}')
+                        f'Call to undeclared function \'{var_name}\', line {line_num}')
                 self.next()
+
                 args = []
                 if self.peek() != 'RPAREN':
-                    args.append(self.expr()[1])
+                    args.append(str(self.expr()[1]))
                     while self.peek() == 'COMMA':
                         self.next()
                         args.append(str(self.expr()[1]))
                 self.expect('RPAREN')
-                return self.env[tok[1]], f'{tok[1]}({", ".join(args)})'
-            else:
-                if tok[1] not in self.variables:
+                return self.env[var_name], f'{var_name}({", ".join(args)})'
+
+            elif self.peek() == 'LSQUARE':
+                # Array access
+                if var_name not in self.variables:
                     raise ReferenceError(
-                        f'Use of undeclared identifier \'{tok[1]}\', line {line_num}')
-                return self.variables[tok[1]], tok[1]
+                        f'Use of undeclared identifier \'{var_name}\', line {line_num}')
+                self.next()
+
+                # Check type. Must be a pointer type, e.g., 'int*'
+                var_type = self.variables[var_name]
+                if not var_type.endswith('*'):
+                    raise TypeError(
+                        f'Variable \'{var_name}\' is not an array and cannot be indexed, line {line_num}')
+
+                # Get index expression
+                index_type, index_expr = self.expr()
+                if index_type != 'int':
+                    raise TypeError(
+                        f'Array index must be an integer, got {index_type}, line {line_num}')
+
+                self.expect('RSQUARE')
+                c_code = f'{var_name}[{index_expr}]'
+                base_type = var_type[:-1]
+                return base_type, c_code
+
+            else:
+                # Just a variable
+                if var_name not in self.variables:
+                    raise ReferenceError(
+                        f'Use of undeclared identifier \'{var_name}\', line {line_num}')
+                return self.variables[var_name], var_name
+
         elif tok[0] == 'LPAREN':
             expr_type, expr = self.expr()
             self.expect('RPAREN')
             return expr_type, expr
         else:
             raise SyntaxError(
-                f'Unexpected token in factor: {tok}, line {tok[2]}')
+                f'Unexpected token in atom: {tok}, line {tok[2]}')
 
     # ==============================================================
     # Utils
