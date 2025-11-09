@@ -624,6 +624,57 @@ class TestParser(unittest.TestCase):
         self.assertIn(
             "Call to undeclared function 'no_such_func'", str(cm.exception))
 
+    # --- NEW: Comment Tests ---
+
+    def test_statement_comment(self):
+        """Tests that a comment is correctly parsed as a statement."""
+        tokens = [
+            ('COMMENT', '// my comment', 1, 4),
+            ('RBRACE', '}', 2, 0)  # End of function body
+        ]
+        parser = Parser(tokens)
+        self.assertEqual(parser.statement(), '// my comment')
+
+    def test_parse_comment_before_fn(self):
+        """Tests parsing a file with a comment before a function."""
+        tokens = [
+            ('COMMENT', '// file header', 1, 0),
+            ('FN', 'ah', 2, 0), ('ID', 'main', 2, 0), ('LPAREN', '(', 2, 0),
+            ('RPAREN', ')', 2, 0), ('LBRACE', '{', 2, 0),
+            ('RBRACE', '}', 3, 0),
+            self.eof_token
+        ]
+        parser = Parser(tokens)
+        expected_code = (
+            '// file header\n'
+            'int main() {\n'
+            '\n'
+            '}\n'
+        )
+        self.assertEqual(parser.parse(), expected_code)
+
+    def test_parse_full_file_with_comments(self):
+        """Tests a full parse with comments inside and outside a fn."""
+        tokens = [
+            ('COMMENT', '// start', 1, 0),
+            ('FN', 'ah', 2, 0), ('ID', 'main', 2, 0), ('LPAREN', '(', 2, 0),
+            ('RPAREN', ')', 2, 0), ('LBRACE', '{', 2, 0),
+            ('COMMENT', '// do work', 3, 4),
+            ('LET', 'beg', 4, 4), ('ID', 'x', 4, 4), ('ASSIGN', '=', 4, 4),
+            ('NUMBER', 5, 4, 4), ('SEMICOL', ';', 4, 4),
+            ('RBRACE', '}', 5, 0),
+            self.eof_token
+        ]
+        parser = Parser(tokens)
+        expected_code = (
+            '// start\n'
+            'int main() {\n'
+            '    // do work\n'
+            '    int x = 5;\n'
+            '}\n'
+        )
+        self.assertEqual(parser.parse(), expected_code)
+
 
 if __name__ == '__main__':
     unittest.main()

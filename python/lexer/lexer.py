@@ -39,6 +39,8 @@ def tokenize(code):
             pass
         elif kind == 'STRING':
             pass
+        elif kind == 'COMMENT':
+            pass
         elif kind == 'NEWLINE':
             # Update line tracking variables and skip adding token
             line_start = mo.end()
@@ -47,9 +49,6 @@ def tokenize(code):
         elif kind == 'SKIP':
             # Skip whitespace and tabs
             continue
-        elif kind == 'COMMENT':
-            line_start = mo.end()
-            line_num += 1
         elif kind == 'MISMATCH':
             # Handles unexpected characters
             raise SyntaxError(
