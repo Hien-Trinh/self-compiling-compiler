@@ -16,6 +16,7 @@ class Token(NamedTuple):
 
 
 TOKEN_SPEC = [
+    ('COMMENT',   r'//([^\n\r]*)'),  # Comment till newline/EOL
     ('TYPE',      r'(int\*|char\*|int|char|void)'),
     ('STRING',    r'"([^"\\]|\\.)*"'),  # Double quoted string
     ('CHAR',      r"'(\\.|[^\\'])'"),

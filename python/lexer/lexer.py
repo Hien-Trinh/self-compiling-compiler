@@ -47,6 +47,9 @@ def tokenize(code):
         elif kind == 'SKIP':
             # Skip whitespace and tabs
             continue
+        elif kind == 'COMMENT':
+            line_start = mo.end()
+            line_num += 1
         elif kind == 'MISMATCH':
             # Handles unexpected characters
             raise SyntaxError(

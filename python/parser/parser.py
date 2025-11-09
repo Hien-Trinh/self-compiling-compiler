@@ -50,6 +50,9 @@ class Parser:
             body;
         }
         """
+        if self.peek() == 'COMMENT':
+            return self.comment_stmt()
+
         indent = self.expect('FN')[3]
 
         ret_type = 'int'  # Set default return type to int if no type given
@@ -101,6 +104,8 @@ class Parser:
             return self.return_stmt()
         elif t == 'ID':
             return self.id_stmt()
+        elif t == 'COMMENT':
+            return self.comment_stmt()
         else:
             raise SyntaxError(f'Unexpected statement: {t}')
 
@@ -295,6 +300,9 @@ class Parser:
         code += '\n'.join(' ' * indent + '    ' + s for s in body)
         code += f'\n{' ' * indent}}}'
         return code
+
+    def comment_stmt(self):
+        return f'{self.next()[1]}'
 
     def return_stmt(self):
         line_num = self.expect('RETURN')[2]

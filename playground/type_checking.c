@@ -5,7 +5,9 @@ char* concat(char* str1, char* str2);
 char* itos(int x);
 char* ctos(char c);
 
+// Comment
 int main() {
+    // Comment
     char* a = "hello";
     int b = 12345;
     int c[10];

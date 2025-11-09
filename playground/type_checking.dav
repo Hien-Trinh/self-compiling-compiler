@@ -1,4 +1,6 @@
+// Comment
 ah int main() {
+    // Comment
     beg char* a = "hello";
     beg int b = 12345;
     beg int c[10];
