@@ -1,7 +1,16 @@
 ah int main() {
     beg char* a = "hello";
     beg int b = 12345;
-    beg char* c = "world";
-    boo(a + " " + b + " " + c);
+    beg int c[10];
+    beg i = 0;
+    while i < 10 {
+        c[i] = i;
+        i = i + 1;
+    }
+    i = 0;
+    while i < 10 {
+        boo(c[i]);
+        i = i + 1;
+    }
     return 0;
 }
