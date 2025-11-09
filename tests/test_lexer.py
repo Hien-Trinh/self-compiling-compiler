@@ -130,6 +130,46 @@ class TokenizerTest(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, r"Unexpected character '@' on line 2"):
             tokenize(code)
 
+    def test_comment_token(self):
+        """Tests that a comment is correctly tokenized."""
+        code = "// this is a comment"
+        expected = [
+            # The value is the full text, including the '//'
+            Token('COMMENT', '// this is a comment', 1, 0),
+            Token('EOF', None, 1, 20)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
+    def test_comment_with_code_and_newline(self):
+        """Tests that comments and newlines are handled correctly."""
+        code = "x = 1 // comment\ny = 2"
+        expected = [
+            Token('ID', 'x', 1, 0),
+            Token('ASSIGN', '=', 1, 2),
+            Token('NUMBER', 1, 1, 4),
+            Token('COMMENT', '// comment', 1, 6),
+            # The newline token is correctly skipped and not part of the comment
+            Token('ID', 'y', 2, 0),
+            Token('ASSIGN', '=', 2, 2),
+            Token('NUMBER', 2, 2, 4),
+            Token('EOF', None, 2, 5)
+        ]
+        # This test will fail if you have the line-counting bug in lexer.py
+        # 'y' will incorrectly be on line 3
+        self.assertTokensEqual(tokenize(code), expected)
+
+    def test_comment_at_eof(self):
+        """Tests a file that ends with a comment."""
+        code = "x = 1 // eof"
+        expected = [
+            Token('ID', 'x', 1, 0),
+            Token('ASSIGN', '=', 1, 2),
+            Token('NUMBER', 1, 1, 4),
+            Token('COMMENT', '// eof', 1, 6),
+            Token('EOF', None, 1, 12)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
 
 if __name__ == '__main__':
     unittest.main()

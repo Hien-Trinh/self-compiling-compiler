@@ -39,6 +39,8 @@ def tokenize(code):
             pass
         elif kind == 'STRING':
             pass
+        elif kind == 'COMMENT':
+            pass
         elif kind == 'NEWLINE':
             # Update line tracking variables and skip adding token
             line_start = mo.end()
