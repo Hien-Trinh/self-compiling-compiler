@@ -349,7 +349,7 @@ class Parser:
         while self.peek() in ('OR', 'AND'):
             op = self.next()[1]
             rhs = self.relational()[1]
-            res_type, result = 'int', f'({result[1]} {op} {rhs})'
+            res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
 
     def relational(self):
@@ -359,14 +359,14 @@ class Parser:
             rhs_type, rhs = self.additive()
             if res_type == 'char*' and rhs_type == 'char*':
                 if op == "==":
-                    result = 'int', f'(strcmp({result}, {rhs}) == 0)'
+                    result = 'int', f'strcmp({result}, {rhs}) == 0'
                 elif op == '!=':
-                    result = 'int', f'(strcmp({result}, {rhs}) != 0)'
+                    result = 'int', f'strcmp({result}, {rhs}) != 0'
             elif res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
                     f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
             else:
-                res_type, result = 'int', f'({result} {op} {rhs})'
+                res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
 
     def additive(self):
@@ -376,12 +376,12 @@ class Parser:
             rhs_type, rhs = self.multiplicative()
             if res_type == 'char*' or rhs_type == 'char*':
                 if op == "+":
-                    res_type, result = 'char*', f'({self.string_plus((res_type, result), (rhs_type, rhs))})'
+                    res_type, result = 'char*', f'{self.string_plus((res_type, result), (rhs_type, rhs))}'
                 else:
                     raise TypeError(
                         f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
             else:
-                res_type, result = 'int', f'({result} {op} {rhs})'
+                res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
 
     def multiplicative(self):
@@ -392,7 +392,7 @@ class Parser:
             if res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
                     f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
-            res_type, result = 'int', f'({result} {op} {rhs})'
+            res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
 
     def atom(self):
@@ -456,7 +456,7 @@ class Parser:
         elif tok[0] == 'LPAREN':
             expr_type, expr = self.expr()
             self.expect('RPAREN')
-            return expr_type, expr
+            return expr_type, f'({expr})'
         else:
             raise SyntaxError(
                 f'Unexpected token in atom: {tok}, line {tok[2]}')

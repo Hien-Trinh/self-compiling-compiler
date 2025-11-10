@@ -76,7 +76,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         expected_code = (
             'int add(int a, int b) {\n'
-            '    return (a + b);\n'
+            '    return a + b;\n'
             '}\n'
         )
         self.assertEqual(parser.parse(), expected_code)
@@ -96,7 +96,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         expected_code = (
             'char* greet(char* name) {\n'
-            '    return (concat("Hello", name));\n'
+            '    return concat("Hello", name);\n'
             '}\n'
         )
         self.assertEqual(parser.parse(), expected_code)
@@ -162,7 +162,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {'myvar': 'int'}  # Must be defined
         parser.env = {}
 
-        self.assertEqual(parser.statement(), 'myvar = (1 + 2);')
+        self.assertEqual(parser.statement(), 'myvar = 1 + 2;')
 
     def test_id_statement_fn_call(self):
         tokens = [
@@ -190,7 +190,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {'val': 'int'}
         parser.env = {}
 
-        self.assertEqual(parser.statement(), 'printf("%d\\n", (val * 2));')
+        self.assertEqual(parser.statement(), 'printf("%d\\n", val * 2);')
 
     def test_return_statement_int(self):
         tokens = [
@@ -221,7 +221,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         parser.variables = {'x': 'int'}
         expected_code = (
-            'if ((x == 1)) {\n'
+            'if (x == 1) {\n'
             '        printf("%d\\n", x);\n'
             '    }'
         )
@@ -245,7 +245,7 @@ class TestParser(unittest.TestCase):
         # y is pre-defined
         parser.variables = {'x': 'int', 'y': 'int'}
         expected_code = (
-            'if ((x > 0)) {\n'
+            'if (x > 0) {\n'
             '        y = 1;\n'  # 'y' is already in variables, so it's a reassignment
             '    } else {\n'
             '        y = 0;\n'
@@ -266,8 +266,8 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         parser.variables = {'i': 'int'}
         expected_code = (
-            'while ((i < 10)) {\n'
-            '        i = (i + 1);\n'
+            'while (i < 10) {\n'
+            '        i = i + 1;\n'
             '    }'
         )
         self.assertEqual(parser.statement(), expected_code)
@@ -282,7 +282,7 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         # expr() now returns (type, value)
-        self.assertEqual(parser.expr(), ('int', '(1 + (2 * 3))'))
+        self.assertEqual(parser.expr(), ('int', '1 + 2 * 3'))
 
     def test_expression_comparison(self):
         tokens = [
@@ -291,7 +291,7 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         parser.variables = {'a': 'int'}
-        self.assertEqual(parser.expr(), ('int', '(a != 5)'))
+        self.assertEqual(parser.expr(), ('int', 'a != 5'))
 
     def test_expression_parens(self):
         tokens = [
@@ -301,7 +301,7 @@ class TestParser(unittest.TestCase):
                                  0), ('SEMICOL', ';', 1, 0)
         ]
         parser = Parser(tokens)
-        self.assertEqual(parser.expr(), ('int', '((1 + 2) * 3)'))
+        self.assertEqual(parser.expr(), ('int', '(1 + 2) * 3'))
 
     def test_expression_fn_call_atom(self):
         tokens = [
@@ -315,7 +315,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {'a': 'int', 'b': 'int'}
         parser.env = {'call': 'int'}
         # Test atom() (formerly factor())
-        self.assertEqual(parser.atom(), ('int', 'call(a, 10, (b + 5))'))
+        self.assertEqual(parser.atom(), ('int', 'call(a, 10, b + 5)'))
 
     # --- NEW: String and Type Tests ---
 
@@ -375,7 +375,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         parser.variables = {'s1': 'char*'}
         # Test string concatenation helper
-        self.assertEqual(parser.expr(), ('char*', '(concat(s1, " world"))'))
+        self.assertEqual(parser.expr(), ('char*', 'concat(s1, " world")'))
 
     def test_string_int_concat_expr(self):
         tokens = [
@@ -386,7 +386,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {}
         # Test string + int concatenation (calls itos)
         self.assertEqual(
-            parser.expr(), ('char*', '(concat("val: ", itos(10)))'))
+            parser.expr(), ('char*', 'concat("val: ", itos(10))'))
 
     def test_int_string_concat_expr(self):
         tokens = [
@@ -398,7 +398,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {}
         # Test int + string concatenation (calls itos)
         self.assertEqual(
-            parser.expr(), ('char*', '(concat(itos(10), " bottles"))'))
+            parser.expr(), ('char*', 'concat(itos(10), " bottles")'))
 
     # --- NEW: Array Tests ---
 
@@ -447,7 +447,7 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         parser.variables = {'my_arr': 'int*'}
-        self.assertEqual(parser.expr(), ('int', '(my_arr[0] + 1)'))
+        self.assertEqual(parser.expr(), ('int', 'my_arr[0] + 1'))
 
     def test_error_let_array_no_type(self):
         tokens = [
@@ -695,7 +695,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {'x': 'int'}
 
         expected_code = (
-            'if ((x > 0)) {\n'
+            'if (x > 0) {\n'
             '        x = 1;\n'
             '    }\n'
             '    // this comment should be preserved\n'
@@ -733,9 +733,9 @@ class TestParser(unittest.TestCase):
         parser.variables = {'x': 'int'}
 
         expected_code = (
-            'if ((x == 1)) {\n'
+            'if (x == 1) {\n'
             '        x = 10;\n'
-            '    } else if ((x == 2)) {\n'
+            '    } else if (x == 2) {\n'
             '        x = 20;\n'
             '    } else {\n'
             '        x = 30;\n'
