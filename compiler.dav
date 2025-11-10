@@ -1,32 +1,205 @@
-ah is_letter(c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
+// File: compiler.dav
+// Author: David T.
+// Description: Stage 1 compiler for the dav language.
+// This file is compiled by the Stage 0 Python compiler.
+
+// =============================================================
+// Lexer Helpers
+//
+// We port the logic from the Python lexer.
+// =============================================================
+
+ah int is_letter(char c) {
+    // Checks if a character is a letter or underscore.
+    // Corresponds to: [A-Za-z_]
+    return (c >= 'a' && c <= 'z') || 
+           (c >= 'A' && c <= 'Z') || 
+           (c == '_');
 }
 
-ah is_digit(c) {
-    return c >= '0' && c <= '9';
+ah int is_digit(char c) {
+    // Checks if a character is a 0-9 digit.
+    // Corresponds to: \d
+    return (c >= '0' && c <= '9');
 }
 
-ah is_space(char c) {
-    return c == ' ' || c == '\n' || c == '\t';
+ah int is_space(char c) {
+    // Checks for whitespace characters to skip.
+    // Corresponds to: [ \t\n]
+    return (c == ' ') || (c == '\t') || (c == '\n');
 }
 
-
-ah check_keywords(s, i, kw) {
-    beg x = 0;
-    boo(is_digit(x) + "hello");
-    return x;
+ah int is_ident_char(char c) {
+    // Checks if a char can be part of an identifier *after* the first char.
+    // Corresponds to: [A-Za-z0-9_]
+    return is_letter(c) || is_digit(c);
 }
 
+// We will also need helpers for keywords, but we can add those later.
+// e.g., ah int check_keywords(char* s) { ... }
 
-ah main() {
-    beg x = 0;
-    beg char y = 'a';
-    while x < 5 {
-        boo(x);
-        x = x + 1;
-        boo(y * x);
-        boo("yipee");
+
+// =============================================================
+// Tokenizer
+//
+// This is the main lexer logic, ported from python/lexer/lexer.py
+// =============================================================
+
+ah int tokenize(char* source_code) {
+    beg int pos = 0;
+    beg int line_num = 1;
+    beg int line_start = 0;
+    
+    boo("Starting tokenizer..."); // Debug print
+    
+    // We will need to get the length of the source code.
+    // Let's assume a helper function 'str_len(char* s)' exists.
+    // We will need to add it to the C helpers.
+    // beg int length = str_len(source_code);
+    
+    // For now, let's just loop until we see a null terminator '\0'
+    while source_code[pos] != '\0' {
+        beg char c = source_code[pos];
+        
+        // Calculate column
+        beg int col = pos - line_start;
+
+        // --- 1. Skip Whitespace ---
+        if is_space(c) {
+            if c == '\n' {
+                line_num = line_num + 1;
+                line_start = pos + 1;
+            }
+            pos = pos + 1;
+        } 
+        
+        // --- 2. Check for Numbers ---
+        else if is_digit(c) {
+            // We found the start of a number
+            // We need to consume all digits
+            // (We'll add this logic next)
+            boo("Found NUMBER");
+            pos = pos + 1; // Stub: just consume one char
+        }
+        
+        // --- 3. Check for Identifiers & Keywords ---
+        else if is_letter(c) {
+            // We found the start of an identifier
+            // We need to consume all ident_chars
+            // (We'll add this logic next)
+            boo("Found ID");
+            pos = pos + 1; // Stub: just consume one char
+        }
+
+        // --- 4. Check for Single-Char Tokens ---
+        else if c == '(' {
+            boo("Found LPAREN");
+            pos = pos + 1;
+        }
+        else if c == ')' {
+            boo("Found RPAREN");
+            pos = pos + 1;
+        }
+        else if c == '{' {
+            boo("Found LBRACE");
+            pos = pos + 1;
+        }
+        else if c == '}' {
+            boo("Found RBRACE");
+            pos = pos + 1;
+        }
+        else if c == '[' {
+            boo("Found LBRACE");
+            pos = pos + 1;
+        }
+        else if c == ']' {
+            boo("Found RBRACE");
+            pos = pos + 1;
+        }
+        else if c == '+' {
+            boo("Found PLUS");
+            pos = pos + 1;
+        }
+        else if c == '-' {
+            boo("Found MINUS");
+            pos = pos + 1;
+        }
+        else if c == '*' {
+            boo("Found MUL");
+            pos = pos + 1;
+        }
+        else if c == '/' {
+            boo("Found DIV");
+            pos = pos + 1;
+        }
+        else if c == ';' {
+            boo("Found SEMICOL");
+            pos = pos + 1;
+        }
+        else if c == ',' {
+            boo("Found COMMA");
+            pos = pos + 1;
+        }
+
+        // --- 5. Check for Multi-Char Tokens ---
+        else if c == '=' {
+            if source_code[pos + 1] == '=' {
+                boo("Found EQ");
+                pos = pos + 2;
+            } else {
+                boo("Found ASSIGN");
+                pos = pos + 1;
+            }
+        }
+        
+        // (add cases for != >= <= && ||)
+
+        // --- 6. Handle Strings and Chars ---
+        else if c == '"' {
+            // Found start of a string
+            // (We'll add this logic next)
+            boo("Found STRING");
+            pos = pos + 1; // Stub
+        }
+        else if c == '\'' {
+            // Found start of a char
+            // (We'll add this logic next)
+            boo("Found CHAR");
+            pos = pos + 1; // Stub
+        }
+
+        // --- 7. Handle Errors ---
+        else {
+            boo("Error: Unexpected character!");
+            // We need a way to print the char: boo(ctos(c));
+            return 1; // Exit with error
+        }
     }
+    
+    boo("Tokenizing complete.");
+    return 0;
+}
 
+
+// =============================================================
+// Main Entry Point
+// =============================================================
+
+ah int main() {
+    // This is a stub to test the lexer helpers
+    beg char x = '0';
+    beg char y = 'a';
+    beg char z = '_';
+    beg char w = ' ';
+    
+    boo(is_digit(x));  // Should print 1 (true)
+    boo(is_letter(y)); // Should print 1 (true)
+    boo(is_letter(z)); // Should print 1 (true)
+    boo(is_space(w));  // Should print 1 (true)
+    boo(is_letter('5')); // Should print 0 (false)
+
+    // A simple test of the tokenizer
+    tokenize("ah main() { beg x = 5; }");
+    
     return 0;
 }
