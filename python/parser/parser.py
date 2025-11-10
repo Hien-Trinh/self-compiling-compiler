@@ -266,6 +266,7 @@ class Parser:
                 f'Invalid statement start: {name}, line {line_num}')
 
     def if_stmt(self):
+        else_indent = ' '
         indent = self.expect('IF')[3]
         cond = self.expr()[1]
         self.expect('LBRACE')
@@ -276,6 +277,15 @@ class Parser:
         code = f'if ({cond}) {{\n'
         code += '\n'.join(' ' * indent + '    ' + s for s in then_body)
         code += f'\n{' ' * indent}}}'
+
+        # Consume any comments that appear between '}' and 'else'
+        # and append them to the generated code.
+        if self.peek() == 'COMMENT':
+            code += '\n'
+            else_indent = ' ' * indent
+        while self.peek() == 'COMMENT':
+            code += f'{else_indent}{self.comment_stmt()}\n'
+
         if self.peek() == 'ELSE':
             self.next()
             self.expect('LBRACE')
@@ -283,7 +293,7 @@ class Parser:
             while self.peek() not in ('RBRACE', 'EOF'):
                 else_body.append(self.statement())
             self.expect('RBRACE')
-            code += ' else {\n'
+            code += f'{else_indent}else {{\n'
             code += '\n'.join(' ' * indent + '    ' + s for s in else_body)
             code += f'\n{' ' * indent}}}'
         return code

@@ -6,6 +6,17 @@ char* itos(int x);
 char* ctos(char c);
 
 // Comment
+void test() {
+    int x = 10;
+    if ((x > 0)) {
+        x = 1;
+    }
+    // comment
+    else {
+        x = 0;
+    }
+}
+
 int main() {
     // Comment
     char* a = "hello";
@@ -18,9 +29,10 @@ int main() {
     }
     i = 0;
     while ((i < 10)) {
-        printf("%d\n", c[i]);
+        // boo(c[i]);
         i = (i + 1);
     }
+    test();
     return 0;
 }
 

@@ -675,6 +675,36 @@ class TestParser(unittest.TestCase):
         )
         self.assertEqual(parser.parse(), expected_code)
 
+    def test_if_else_with_comment_before_else(self):
+        """Tests that a comment between '}' and 'else' is parsed correctly."""
+        tokens = [
+            ('IF', 'if', 1, 4), ('ID', 'x', 1,
+                                 4), ('GT', '>', 1, 4), ('NUMBER', 0, 1, 4),
+            ('LBRACE', '{', 1, 4),
+            ('ID', 'x', 2, 6), ('ASSIGN', '=', 2,
+                                6), ('NUMBER', 1, 2, 6), ('SEMICOL', ';', 2, 6),
+            ('RBRACE', '}', 3, 4),
+            ('COMMENT', '// this comment should be preserved', 4, 4),
+            ('ELSE', 'else', 5, 4), ('LBRACE', '{', 5, 4),
+            ('ID', 'x', 6, 6), ('ASSIGN', '=', 6,
+                                6), ('NUMBER', 0, 6, 6), ('SEMICOL', ';', 6, 6),
+            ('RBRACE', '}', 7, 4),
+            ('RBRACE', '}', 8, 0)  # Dummy end of function
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'x': 'int'}
+
+        expected_code = (
+            'if ((x > 0)) {\n'
+            '        x = 1;\n'
+            '    }\n'
+            '    // this comment should be preserved\n'
+            '    else {\n'
+            '        x = 0;\n'
+            '    }'
+        )
+        self.assertEqual(parser.statement(), expected_code)
+
 
 if __name__ == '__main__':
     unittest.main()

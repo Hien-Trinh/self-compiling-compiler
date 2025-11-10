@@ -1,4 +1,15 @@
 // Comment
+ah void test() {
+    beg x = 10;
+    if x > 0 {
+        x = 1;
+    }
+    // comment
+    else {
+        x = 0;
+    }
+}
+
 ah int main() {
     // Comment
     beg char* a = "hello";
@@ -11,8 +22,9 @@ ah int main() {
     }
     i = 0;
     while i < 10 {
-        boo(c[i]);
+        // boo(c[i]);
         i = i + 1;
     }
+    test();
     return 0;
 }
