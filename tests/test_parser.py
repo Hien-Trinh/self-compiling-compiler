@@ -705,6 +705,44 @@ class TestParser(unittest.TestCase):
         )
         self.assertEqual(parser.statement(), expected_code)
 
+    def test_if_else_if_else_statement(self):
+        """Tests a full 'if / else if / else' chain."""
+        tokens = [
+            # if (x == 1) { x = 10; }
+            ('IF', 'if', 1, 4), ('ID', 'x', 1,
+                                 4), ('EQ', '==', 1, 4), ('NUMBER', 1, 1, 4),
+            ('LBRACE', '{', 1, 4),
+            ('ID', 'x', 2, 6), ('ASSIGN', '=', 2,
+                                6), ('NUMBER', 10, 2, 6), ('SEMICOL', ';', 2, 6),
+            ('RBRACE', '}', 3, 4),
+            # else if (x == 2) { x = 20; }
+            ('ELSE', 'else', 3, 4), ('IF', 'if', 3, 4), ('ID',
+                                                         'x', 3, 4), ('EQ', '==', 3, 4), ('NUMBER', 2, 3, 4),
+            ('LBRACE', '{', 3, 4),
+            ('ID', 'x', 4, 6), ('ASSIGN', '=', 4,
+                                6), ('NUMBER', 20, 4, 6), ('SEMICOL', ';', 4, 6),
+            ('RBRACE', '}', 5, 4),
+            # else { x = 30; }
+            ('ELSE', 'else', 5, 4), ('LBRACE', '{', 5, 4),
+            ('ID', 'x', 6, 6), ('ASSIGN', '=', 6,
+                                6), ('NUMBER', 30, 6, 6), ('SEMICOL', ';', 6, 6),
+            ('RBRACE', '}', 7, 4),
+            ('RBRACE', '}', 8, 0)  # Dummy end of function
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'x': 'int'}
+
+        expected_code = (
+            'if ((x == 1)) {\n'
+            '        x = 10;\n'
+            '    } else if ((x == 2)) {\n'
+            '        x = 20;\n'
+            '    } else {\n'
+            '        x = 30;\n'
+            '    }'
+        )
+        self.assertEqual(parser.statement(), expected_code)
+
 
 if __name__ == '__main__':
     unittest.main()

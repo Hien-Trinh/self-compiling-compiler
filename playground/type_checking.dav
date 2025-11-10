@@ -3,9 +3,7 @@ ah void test() {
     beg x = 10;
     if x > 0 {
         x = 1;
-    }
-    // comment
-    else {
+    } else if x == 0 {
         x = 0;
     }
 }

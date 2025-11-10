@@ -288,14 +288,28 @@ class Parser:
 
         if self.peek() == 'ELSE':
             self.next()
-            self.expect('LBRACE')
-            else_body = []
-            while self.peek() not in ('RBRACE', 'EOF'):
-                else_body.append(self.statement())
-            self.expect('RBRACE')
-            code += f'{else_indent}else {{\n'
-            code += '\n'.join(' ' * indent + '    ' + s for s in else_body)
-            code += f'\n{' ' * indent}}}'
+            # Check for 'else if'
+            if self.peek() == 'IF':
+                # Prepend ' else ' and the rest is handled by recursion
+                code += f'{else_indent}else {self.if_stmt()}'
+
+            # Check for 'else { ... }'
+            elif self.peek() == 'LBRACE':
+                self.next()
+                else_body = []
+                while self.peek() not in ('RBRACE', 'EOF'):
+                    else_body.append(self.statement())
+                self.expect('RBRACE')
+
+                code += f'{else_indent}else {{\n'
+                code += '\n'.join(' ' * indent + '    ' + s for s in else_body)
+                code += f'\n{' ' * indent}}}'
+
+            else:
+                tok = self.tokens[self.pos]
+                raise SyntaxError(
+                    f"Expected 'if' or '{{' after 'else', got {tok}, line {tok[2]}")
+
         return code
 
     def while_stmt(self):
