@@ -151,8 +151,36 @@ ah int tokenize(char* source_code) {
                 pos = pos + 1;
             }
         }
-        
-        // (add cases for != >= <= && ||)
+        else if c == '!' && source_code[pos + 1] == '=' {
+            boo("Found NE");
+            pos = pos + 2;
+        }
+        else if c == '>' {
+            if source_code[pos + 1] == '=' {
+                boo("Found GE");
+                pos = pos + 2;
+            } else {
+                boo("Found GT");
+                pos = pos + 1;
+            }
+        }
+        else if c == '<' {
+            if source_code[pos + 1] == '=' {
+                boo("Found LE");
+                pos = pos + 2;
+            } else {
+                boo("Found LT");
+                pos = pos + 1;
+            }
+        }
+        else if c == '&' && source_code[pos + 1] == '&' {
+            boo("Found AND");
+            pos = pos + 2;
+        }
+        else if c == '|' && source_code[pos + 1] == '|' {
+            boo("Found AND");
+            pos = pos + 2;
+        }
 
         // --- 6. Handle Strings and Chars ---
         else if c == '"' {
