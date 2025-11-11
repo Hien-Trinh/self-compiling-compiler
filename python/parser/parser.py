@@ -15,7 +15,12 @@ class Parser:
         self.pos = 0
         self.fn_name = ""
         self.variables = {}
-        self.env = {}
+        # Add helper functions to global environment scope
+        self.env = {
+            "concat": "char*",
+            "ctos": "char*",
+            "itos": "char*"
+        }
 
     # Returns kind of the next token
     def peek(self):
@@ -359,9 +364,9 @@ class Parser:
             rhs_type, rhs = self.additive()
             if res_type == 'char*' and rhs_type == 'char*':
                 if op == "==":
-                    result = 'int', f'strcmp({result}, {rhs}) == 0'
+                    rhs_type, result = 'int', f'strcmp({result}, {rhs}) == 0'
                 elif op == '!=':
-                    result = 'int', f'strcmp({result}, {rhs}) != 0'
+                    rhs_type, result = 'int', f'strcmp({result}, {rhs}) != 0'
             elif res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
                     f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
