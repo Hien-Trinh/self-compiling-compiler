@@ -62,26 +62,37 @@ char* check_keywords(char* s) {
     return "ID";
 }
 
+// Helper to add a simple token (without a value) to the token arrays.
+int add_simple_token(char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], int index, char* type, int line, int col) {
+    token_types[index] = type;
+    token_values[index] = -1;
+    // -1 means no value
+    token_lines[index] = line;
+    token_cols[index] = col;
+    return 0;
+}
+
 // =============================================================
 // Tokenizer
 //
 // This is the main lexer logic, ported from python/lexer/lexer.py
 // =============================================================
-int tokenize(char* source_code) {
+int tokenize(char* source_code, char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], char token_pool[50000]) {
     int pos = 0;
     int line_num = 1;
     int line_start = 0;
-    // Buffer for string/num/id values
     char buffer[100];
-    // Buffer index
     int i = 0;
-    printf("%s\n", "Starting tokenizer...");
-    // Debug print
-    // Loop until we see a null terminator '\0'
+    int token_count = 0;
+    int pool_pos = 0;
+    char c;
+    int col;
+    int j;
+    char token_val;
+    int token_start_col;
     while (source_code[pos] != '\0') {
-        char c = source_code[pos];
-        int col = pos - line_start;
-        // Reset buffer index
+        c = source_code[pos];
+        col = pos - line_start;
         i = 0;
         // --- 1. Skip Whitespace ---
         if (is_space(c)) {
@@ -93,20 +104,18 @@ int tokenize(char* source_code) {
         }
         // --- 2. Check for Numbers ---
         else if (is_digit(c)) {
-                 // Consume the integer
+                 token_start_col = col;
                  while (is_digit(c)) {
                 buffer[i] = c;
                 i = i + 1;
                 pos = pos + 1;
                 c = source_code[pos];
             }
-                 // Check for a decimal part
                  if (c == '.') {
                 buffer[i] = c;
                 i = i + 1;
                 pos = pos + 1;
                 c = source_code[pos];
-                // Consume the fractional part
                 while (is_digit(c)) {
                     buffer[i] = c;
                     i = i + 1;
@@ -114,125 +123,159 @@ int tokenize(char* source_code) {
                     c = source_code[pos];
                 }
             }
-            // Null-terminate the string in the buffer
-
                  buffer[i] = '\0';
-                 printf("%s\n", concat("Found NUMBER:", buffer));
+                 token_types[token_count] = "NUMBER";
+                 token_lines[token_count] = line_num;
+                 token_cols[token_count] = token_start_col;
+                 // Copy buffer to string pool
+                 token_values[token_count] = pool_pos;
+                 j = 0;
+                 // <= to include the '\0'
+                 while (j <= i) {
+                token_pool[pool_pos] = buffer[j];
+                pool_pos = pool_pos + 1;
+                j = j + 1;
+            }
+                 token_count = token_count + 1;
              }
              // --- 3. Check for Identifiers & Keywords ---
              else if (is_letter(c)) {
-                 // Consume letter and digit
+                 token_start_col = col;
                  while (is_ident_char(c)) {
                 buffer[i] = c;
                 i = i + 1;
                 pos = pos + 1;
                 c = source_code[pos];
             }
-                 // Null-terminate the string in the buffer
                  buffer[i] = '\0';
-                 // Check if the identifier is a keyword
-                 char* token_type = check_keywords(buffer);
-                 printf("%s\n", token_type);
-                 printf("%s\n", buffer);
+                 token_types[token_count] = check_keywords(buffer);
+                 token_lines[token_count] = line_num;
+                 token_cols[token_count] = token_start_col;
+                 // Copy buffer to string pool
+                 token_values[token_count] = pool_pos;
+                 j = 0;
+                 while (j <= i) {
+                token_pool[pool_pos] = buffer[j];
+                pool_pos = pool_pos + 1;
+                j = j + 1;
+            }
+                 token_count = token_count + 1;
              }
              // --- 4. Check for Single-Char Tokens ---
              else if (c == '(') {
-                 printf("%s\n", "Found LPAREN");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LPAREN", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ')') {
-                 printf("%s\n", "Found RPAREN");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "RPAREN", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '{') {
-                 printf("%s\n", "Found LBRACE");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LBRACE", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '}') {
-                 printf("%s\n", "Found RBRACE");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "RBRACE", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '[') {
-                 printf("%s\n", "Found LSQUARE");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LSQUARE", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ']') {
-                 printf("%s\n", "Found RSQUARE");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "RSQUARE", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '+') {
-                 printf("%s\n", "Found PLUS");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "PLUS", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '-') {
-                 printf("%s\n", "Found MINUS");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "MINUS", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '*') {
-                 printf("%s\n", "Found MUL");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "MUL", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '/') {
-                 printf("%s\n", "Found DIV");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "DIV", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ';') {
-                 printf("%s\n", "Found SEMICOL");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "SEMICOL", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ',') {
-                 printf("%s\n", "Found COMMA");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "COMMA", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 1;
              }
              // --- 5. Check for Multi-Char Tokens ---
              else if (c == '=') {
                  if (source_code[pos + 1] == '=') {
-                printf("%s\n", "Found EQ");
+                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "EQ", line_num, col);
+                token_count = token_count + 1;
                 pos = pos + 2;
             } else {
-                printf("%s\n", "Found ASSIGN");
+                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "ASSIGN", line_num, col);
+                token_count = token_count + 1;
                 pos = pos + 1;
             }
              } else if (c == '!' && source_code[pos + 1] == '=') {
-                 printf("%s\n", "Found NE");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "NE", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 2;
              } else if (c == '>') {
                  if (source_code[pos + 1] == '=') {
-                printf("%s\n", "Found GE");
+                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "GE", line_num, col);
+                token_count = token_count + 1;
                 pos = pos + 2;
             } else {
-                printf("%s\n", "Found GT");
+                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "GT", line_num, col);
+                token_count = token_count + 1;
                 pos = pos + 1;
             }
              } else if (c == '<') {
                  if (source_code[pos + 1] == '=') {
-                printf("%s\n", "Found LE");
+                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LE", line_num, col);
+                token_count = token_count + 1;
                 pos = pos + 2;
             } else {
-                printf("%s\n", "Found LT");
+                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LT", line_num, col);
+                token_count = token_count + 1;
                 pos = pos + 1;
             }
              } else if (c == '&' && source_code[pos + 1] == '&') {
-                 printf("%s\n", "Found AND");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "AND", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 2;
              } else if (c == '|' && source_code[pos + 1] == '|') {
-                 printf("%s\n", "Found OR");
+                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "OR", line_num, col);
+                 token_count = token_count + 1;
                  pos = pos + 2;
              }
              // --- 6. Handle Strings and Chars ---
              else if (c == '"') {
-                 // Skip over left double-quote
+                 token_start_col = col;
                  pos = pos + 1;
                  c = source_code[pos];
-                 // Between double-quotes
                  while (c != '"' && c != '\0') {
-                if ((c == '\\')) {
-                    // Escape characters, consume '\'
+                if (c == '\\') {
                     pos = pos + 1;
                     c = source_code[pos];
-                    if ((c == 'n')) {
+                    if (c == 'n') {
                         buffer[i] = '\n';
-                    } else if ((c == 't')) {
+                    } else if (c == 't') {
                                buffer[i] = '\t';
-                           } else if ((c == '"')) {
+                           } else if (c == '"') {
                                buffer[i] = '"';
-                           } else if ((c == '\\')) {
+                           } else if (c == '\\') {
                                buffer[i] = '\\';
                            } else {
-                               // Unknown escape, just add the char
                                buffer[i] = c;
                            }
                 } else {
-                    // Regular character
                     buffer[i] = c;
                 }
                 i = i + 1;
@@ -240,92 +283,109 @@ int tokenize(char* source_code) {
                 c = source_code[pos];
             }
                  // Check unclosed string
-                 if ((c == '\0')) {
+                 if (c == '\0') {
                 printf("%s\n", "Error: Unclosed string literal!");
                 return 1;
             }
-            // Skip over right double-quote
-
                  pos = pos + 1;
-                 // Null-terminate the string in the buffer
                  buffer[i] = '\0';
-                 printf("%s\n", "Found STRING");
-                 printf("%s\n", buffer);
+                 // Add token
+                 token_types[token_count] = "STRING";
+                 token_lines[token_count] = line_num;
+                 token_cols[token_count] = token_start_col;
+                 token_values[token_count] = pool_pos;
+                 j = 0;
+                 while ((j <= i)) {
+                token_pool[pool_pos] = buffer[j];
+                pool_pos = pool_pos + 1;
+                j = j + 1;
+            }
+                 token_count = token_count + 1;
              } else if (c == '\'') {
-                 // Skip over left quote
+                 token_start_col = col;
                  pos = pos + 1;
                  c = source_code[pos];
-                 // Store the char
-                 char token_val = c;
-                 if ((c == '\\')) {
-                // Escape characters, consume '\'
+                 token_val = c;
+                 if (c == '\\') {
                 pos = pos + 1;
                 c = source_code[pos];
-                if ((c == 'n')) {
+                if (c == 'n') {
                     token_val = '\n';
-                } else if ((c == 't')) {
+                } else if (c == 't') {
                            token_val = '\t';
-                       } else if ((c == '\'')) {
+                       } else if (c == '\'') {
                            token_val = '\'';
-                       } else if ((c == '\\')) {
+                       } else if (c == '\\') {
                            token_val = '\\';
                        } else {
                            token_val = c;
                        }
             }
-            // Move to the *next* char, which should be the closing quote
-
                  pos = pos + 1;
                  c = source_code[pos];
-                 // Check for closing quote
-                 if ((c != '\'')) {
+                 if (c != '\'') {
                 printf("%s\n", "Error: Unclosed or invalid char literal!");
                 return 1;
             }
-            // Skip over right quote
-
                  pos = pos + 1;
-                 // "Add" the token
-                 printf("%s\n", "Found CHAR");
-                 // Store char in buffer to print as a 1-char string
+                 // Add token
                  buffer[0] = token_val;
                  buffer[1] = '\0';
-                 printf("%s\n", buffer);
+                 token_types[token_count] = "CHAR";
+                 token_lines[token_count] = line_num;
+                 token_cols[token_count] = token_start_col;
+                 token_values[token_count] = pool_pos;
+                 token_pool[pool_pos] = buffer[0];
+                 token_pool[pool_pos + 1] = buffer[1];
+                 pool_pos = pool_pos + 2;
+                 token_count = token_count + 1;
              }
              // --- 7. Handle Errors ---
              else {
                  printf("%s\n", "Error: Unexpected character!");
-                 // Converts char 'c' to string
                  printf("%s\n", ctos(c));
-                 // Exit with error
                  return 1;
              }
     }
-    printf("%s\n", "Tokenizing complete.");
-    return 0;
+    // Add EOF Token
+    add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "EOF", line_num, col);
+    token_count = token_count + 1;
+    return token_count;
 }
 
 // =============================================================
 // Main Entry Point
 // =============================================================
 int main() {
-    // This is a stub to test the lexer helpers
-    char x = '0';
-    char y = 'a';
-    char z = '_';
-    char w = ' ';
-    printf("%d\n", is_digit(x));
-    // Should print 1 (true)
-    printf("%d\n", is_letter(y));
-    // Should print 1 (true)
-    printf("%d\n", is_letter(z));
-    // Should print 1 (true)
-    printf("%d\n", is_space(w));
-    // Should print 1 (true)
-    printf("%d\n", is_letter('5'));
-    // Should print 0 (false)
+    // --- NEW: Declare token storage arrays ---
+    // These arrays will be populated by the tokenizer
+    // Max 1000 tokens
+    char* token_types[1000];
+    // token_values stores an *index* into the token_pool
+    // -1 means no value (for single-char tokens)
+    int token_values[1000];
+    int token_lines[1000];
+    int token_cols[1000];
+    // A "string pool" or "arena" for all token values (strings, numbers)
+    // 50k chars should be enough for this compiler
+    char token_pool[50000];
     // A simple test of the tokenizer
-    tokenize("ah main() { beg x = 5; }");
+    char* code = "ah main() { beg x = 123.45; }";
+    int n_tokens = tokenize(code, token_types, token_values, token_lines, token_cols, token_pool);
+    // Print the tokens we stored
+    printf("%s\n", "--- Stored Tokens ---");
+    int i = 0;
+    char* type;
+    int val_idx;
+    while (i < n_tokens) {
+        type = token_types[i];
+        val_idx = token_values[i];
+        printf("%s\n", type);
+        if (val_idx != -1) {
+            printf("%s\n", (token_pool + val_idx));
+        }
+        i = i + 1;
+    }
     return 0;
 }
 
