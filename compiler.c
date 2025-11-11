@@ -357,7 +357,7 @@ int tokenize(char* source_code, char* token_types[1000], int token_values[1000],
 // Main Entry Point
 // =============================================================
 int main() {
-    // --- NEW: Declare token storage arrays ---
+    // Declare token storage arrays
     // These arrays will be populated by the tokenizer
     // Max 1000 tokens
     char* token_types[1000];

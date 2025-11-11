@@ -354,7 +354,7 @@ ah int tokenize(char* source_code,
 // =============================================================
 
 ah int main() {
-    // --- NEW: Declare token storage arrays ---
+    // Declare token storage arrays
     // These arrays will be populated by the tokenizer
     
     // Max 1000 tokens

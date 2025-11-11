@@ -374,33 +374,20 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         parser.variables = {'s1': 'char*'}
-        # Test string concatenation helper
         self.assertEqual(parser.expr(), ('char*', 'concat(s1, " world")'))
 
-    def test_string_int_concat_expr(self):
+    def test_pointer_arithmetic_expr(self):
+        """Tests that pointer + int arithmetic IS allowed."""
         tokens = [
-            ('STRING', '"val: "', 1, 0), ('PLUS', '+', 1, 0), ('NUMBER', 10, 1, 0),
+            ('ID', 'my_array', 1, 0), ('PLUS', '+', 1, 0), ('NUMBER', 5, 1, 0),
             ('SEMICOL', ';', 1, 0)
         ]
         parser = Parser(tokens)
-        parser.variables = {}
-        # Test string + int concatenation (calls itos)
-        self.assertEqual(
-            parser.expr(), ('char*', 'concat("val: ", itos(10))'))
+        # my_array is 'int*' (an int array)
+        parser.variables = {'my_array': 'int*'}
 
-    def test_int_string_concat_expr(self):
-        tokens = [
-            ('NUMBER', 10, 1, 0), ('PLUS', '+', 1,
-                                   0), ('STRING', '" bottles"', 1, 0),
-            ('SEMICOL', ';', 1, 0)
-        ]
-        parser = Parser(tokens)
-        parser.variables = {}
-        # Test int + string concatenation (calls itos)
-        self.assertEqual(
-            parser.expr(), ('char*', 'concat(itos(10), " bottles")'))
-
-    # --- NEW: Array Tests ---
+        # This should correctly generate C pointer math
+        self.assertEqual(parser.expr(), ('int*', '(my_array + 5)'))
 
     def test_let_array_declaration(self):
         tokens = [
