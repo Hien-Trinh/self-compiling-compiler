@@ -379,7 +379,17 @@ class Parser:
         while self.peek() in ('PLUS', 'MINUS'):
             op = self.next()[1]
             rhs_type, rhs = self.multiplicative()
-            if res_type == 'char*' or rhs_type == 'char*':
+            # Check for pointer arithmetic
+            if (res_type == 'char*' and rhs_type == 'int') or \
+               (res_type == 'int' and rhs_type == 'char*'):
+
+                if op == '+':
+                    res_type, result = 'char*', f'({result} {op} {rhs})'
+                else:
+                    raise TypeError(
+                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+
+            elif res_type == 'char*' or rhs_type == 'char*':
                 if op == "+":
                     res_type, result = 'char*', f'{self.string_plus((res_type, result), (rhs_type, rhs))}'
                 else:
