@@ -38,8 +38,30 @@ int is_ident_char(char c) {
     return is_letter(c) || is_digit(c);
 }
 
-// We will also need helpers for keywords, but we can add those later.
-// e.g., ah int check_keywords(char* s) { ... }
+char* check_keywords(char* s) {
+    // Checks if a string 's' is a keyword.
+    // If it is, return the keyword's Token Type.
+    // Otherwise, return "ID".
+    if (strcmp(s, "ah") == 0) {
+        return "FN";
+    } else if (strcmp(s, "beg") == 0) {
+             return "LET";
+         } else if (strcmp(s, "boo") == 0) {
+             return "PRINT";
+         } else if (strcmp(s, "if") == 0) {
+             return "IF";
+         } else if (strcmp(s, "else") == 0) {
+             return "ELSE";
+         } else if (strcmp(s, "while") == 0) {
+             return "WHILE";
+         } else if (strcmp(s, "return") == 0) {
+             return "RETURN";
+         }
+         // Default case: not a keyword
+
+    return "ID";
+}
+
 // =============================================================
 // Tokenizer
 //
@@ -49,17 +71,18 @@ int tokenize(char* source_code) {
     int pos = 0;
     int line_num = 1;
     int line_start = 0;
+    // Buffer for string/num/id values
+    char buffer[100];
+    // Buffer index
+    int i = 0;
     printf("%s\n", "Starting tokenizer...");
     // Debug print
-    // We will need to get the length of the source code.
-    // Let's assume a helper function 'str_len(char* s)' exists.
-    // We will need to add it to the C helpers.
-    // beg int length = str_len(source_code);
-    // For now, let's just loop until we see a null terminator '\0'
+    // Loop until we see a null terminator '\0'
     while (source_code[pos] != '\0') {
         char c = source_code[pos];
-        // Calculate column
         int col = pos - line_start;
+        // Reset buffer index
+        i = 0;
         // --- 1. Skip Whitespace ---
         if (is_space(c)) {
             if (c == '\n') {
@@ -70,21 +93,47 @@ int tokenize(char* source_code) {
         }
         // --- 2. Check for Numbers ---
         else if (is_digit(c)) {
-                 // We found the start of a number
-                 // We need to consume all digits
-                 // (We'll add this logic next)
-                 printf("%s\n", "Found NUMBER");
-                 pos = pos + 1;
-                 // Stub: just consume one char
+                 // Consume the integer
+                 while (is_digit(c)) {
+                buffer[i] = c;
+                i = i + 1;
+                pos = pos + 1;
+                c = source_code[pos];
+            }
+                 // Check for a decimal part
+                 if (c == '.') {
+                buffer[i] = c;
+                i = i + 1;
+                pos = pos + 1;
+                c = source_code[pos];
+                // Consume the fractional part
+                while (is_digit(c)) {
+                    buffer[i] = c;
+                    i = i + 1;
+                    pos = pos + 1;
+                    c = source_code[pos];
+                }
+            }
+            // Null-terminate the string in the buffer
+
+                 buffer[i] = '\0';
+                 printf("%s\n", concat("Found NUMBER:", buffer));
              }
              // --- 3. Check for Identifiers & Keywords ---
              else if (is_letter(c)) {
-                 // We found the start of an identifier
-                 // We need to consume all ident_chars
-                 // (We'll add this logic next)
-                 printf("%s\n", "Found ID");
-                 pos = pos + 1;
-                 // Stub: just consume one char
+                 // Consume letter and digit
+                 while (is_ident_char(c)) {
+                buffer[i] = c;
+                i = i + 1;
+                pos = pos + 1;
+                c = source_code[pos];
+            }
+                 // Null-terminate the string in the buffer
+                 buffer[i] = '\0';
+                 // Check if the identifier is a keyword
+                 char* token_type = check_keywords(buffer);
+                 printf("%s\n", token_type);
+                 printf("%s\n", buffer);
              }
              // --- 4. Check for Single-Char Tokens ---
              else if (c == '(') {
@@ -100,10 +149,10 @@ int tokenize(char* source_code) {
                  printf("%s\n", "Found RBRACE");
                  pos = pos + 1;
              } else if (c == '[') {
-                 printf("%s\n", "Found LBRACE");
+                 printf("%s\n", "Found LSQUARE");
                  pos = pos + 1;
              } else if (c == ']') {
-                 printf("%s\n", "Found RBRACE");
+                 printf("%s\n", "Found RSQUARE");
                  pos = pos + 1;
              } else if (c == '+') {
                  printf("%s\n", "Found PLUS");
@@ -133,28 +182,123 @@ int tokenize(char* source_code) {
                 printf("%s\n", "Found ASSIGN");
                 pos = pos + 1;
             }
+             } else if (c == '!' && source_code[pos + 1] == '=') {
+                 printf("%s\n", "Found NE");
+                 pos = pos + 2;
+             } else if (c == '>') {
+                 if (source_code[pos + 1] == '=') {
+                printf("%s\n", "Found GE");
+                pos = pos + 2;
+            } else {
+                printf("%s\n", "Found GT");
+                pos = pos + 1;
+            }
+             } else if (c == '<') {
+                 if (source_code[pos + 1] == '=') {
+                printf("%s\n", "Found LE");
+                pos = pos + 2;
+            } else {
+                printf("%s\n", "Found LT");
+                pos = pos + 1;
+            }
+             } else if (c == '&' && source_code[pos + 1] == '&') {
+                 printf("%s\n", "Found AND");
+                 pos = pos + 2;
+             } else if (c == '|' && source_code[pos + 1] == '|') {
+                 printf("%s\n", "Found OR");
+                 pos = pos + 2;
              }
-             // (add cases for != >= <= && ||)
              // --- 6. Handle Strings and Chars ---
              else if (c == '"') {
-                 // Found start of a string
-                 // (We'll add this logic next)
+                 // Skip over left double-quote
+                 pos = pos + 1;
+                 c = source_code[pos];
+                 // Between double-quotes
+                 while (c != '"' && c != '\0') {
+                if ((c == '\\')) {
+                    // Escape characters, consume '\'
+                    pos = pos + 1;
+                    c = source_code[pos];
+                    if ((c == 'n')) {
+                        buffer[i] = '\n';
+                    } else if ((c == 't')) {
+                               buffer[i] = '\t';
+                           } else if ((c == '"')) {
+                               buffer[i] = '"';
+                           } else if ((c == '\\')) {
+                               buffer[i] = '\\';
+                           } else {
+                               // Unknown escape, just add the char
+                               buffer[i] = c;
+                           }
+                } else {
+                    // Regular character
+                    buffer[i] = c;
+                }
+                i = i + 1;
+                pos = pos + 1;
+                c = source_code[pos];
+            }
+                 // Check unclosed string
+                 if ((c == '\0')) {
+                printf("%s\n", "Error: Unclosed string literal!");
+                return 1;
+            }
+            // Skip over right double-quote
+
+                 pos = pos + 1;
+                 // Null-terminate the string in the buffer
+                 buffer[i] = '\0';
                  printf("%s\n", "Found STRING");
-                 pos = pos + 1;
-                 // Stub
+                 printf("%s\n", buffer);
              } else if (c == '\'') {
-                 // Found start of a char
-                 // (We'll add this logic next)
-                 printf("%s\n", "Found CHAR");
+                 // Skip over left quote
                  pos = pos + 1;
-                 // Stub
+                 c = source_code[pos];
+                 // Store the char
+                 char token_val = c;
+                 if ((c == '\\')) {
+                // Escape characters, consume '\'
+                pos = pos + 1;
+                c = source_code[pos];
+                if ((c == 'n')) {
+                    token_val = '\n';
+                } else if ((c == 't')) {
+                           token_val = '\t';
+                       } else if ((c == '\'')) {
+                           token_val = '\'';
+                       } else if ((c == '\\')) {
+                           token_val = '\\';
+                       } else {
+                           token_val = c;
+                       }
+            }
+            // Move to the *next* char, which should be the closing quote
+
+                 pos = pos + 1;
+                 c = source_code[pos];
+                 // Check for closing quote
+                 if ((c != '\'')) {
+                printf("%s\n", "Error: Unclosed or invalid char literal!");
+                return 1;
+            }
+            // Skip over right quote
+
+                 pos = pos + 1;
+                 // "Add" the token
+                 printf("%s\n", "Found CHAR");
+                 // Store char in buffer to print as a 1-char string
+                 buffer[0] = token_val;
+                 buffer[1] = '\0';
+                 printf("%s\n", buffer);
              }
              // --- 7. Handle Errors ---
              else {
                  printf("%s\n", "Error: Unexpected character!");
-                 // We need a way to print the char: boo(ctos(c));
-                 return 1;
+                 // Converts char 'c' to string
+                 printf("%s\n", ctos(c));
                  // Exit with error
+                 return 1;
              }
     }
     printf("%s\n", "Tokenizing complete.");
