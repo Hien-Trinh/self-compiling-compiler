@@ -58,6 +58,18 @@ class TokenizerTest(unittest.TestCase):
         ]
         self.assertTokensEqual(tokenize(code), expected)
 
+    def test_type_tokens(self):
+        """Tests that type keywords are correctly tokenized."""
+        code = "int char char* int*"
+        expected = [
+            Token('TYPE', 'int', 1, 0),
+            Token('TYPE', 'char', 1, 4),
+            Token('TYPE', 'char*', 1, 9),
+            Token('TYPE', 'int*', 1, 15),
+            Token('EOF', None, 1, 19)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
     def test_operators_and_symbols(self):
         """Tests all supported operators and grouping symbols."""
         code = "a + (b - c) * d / e == f != g < h > i"
@@ -85,6 +97,27 @@ class TokenizerTest(unittest.TestCase):
         ]
         self.assertTokensEqual(tokenize(code), expected)
 
+    def test_new_operators_and_brackets(self):
+        """Tests >=, <=, &&, ||, [], and comments."""
+        code = "a >= b && c <= d || e[f] // comment"
+        expected = [
+            Token('ID', 'a', 1, 0),
+            Token('GE', '>=', 1, 2),
+            Token('ID', 'b', 1, 5),
+            Token('AND', '&&', 1, 7),
+            Token('ID', 'c', 1, 10),
+            Token('LE', '<=', 1, 12),
+            Token('ID', 'd', 1, 15),
+            Token('OR', '||', 1, 17),
+            Token('ID', 'e', 1, 20),
+            Token('LSQUARE', '[', 1, 21),
+            Token('ID', 'f', 1, 22),
+            Token('RSQUARE', ']', 1, 23),
+            Token('COMMENT', '// comment', 1, 25),
+            Token('EOF', None, 1, 35)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
     def test_multiline_code_and_position(self):
         """Tests correct line and column tracking across multiple lines."""
         code = "beg x = 1\nif x == 1 {\nboo x}"
@@ -104,6 +137,53 @@ class TokenizerTest(unittest.TestCase):
             Token('ID', 'x', 3, 4),
             Token('RBRACE', '}', 3, 5),
             Token('EOF', None, 3, 6)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
+    def test_string_literal(self):
+        """Tests a simple string literal."""
+        code = 'beg s = "hello world"'
+        expected = [
+            Token('LET', 'beg', 1, 0),
+            Token('ID', 's', 1, 4),
+            Token('ASSIGN', '=', 1, 6),
+            Token('STRING', '"hello world"', 1, 8),
+            Token('EOF', None, 1, 21)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
+    def test_string_with_escapes(self):
+        """Tests string literals with various escape sequences."""
+        # Use a python raw string for the test code
+        code = r'"\"\\\n\t"'
+        expected = [
+            # The token's value includes the quotes and the raw escapes
+            Token('STRING', r'"\"\\\n\t"', 1, 0),
+            Token('EOF', None, 1, 10)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
+    def test_char_literal(self):
+        """Tests a simple character literal."""
+        code = "beg c = 'a'"
+        expected = [
+            Token('LET', 'beg', 1, 0),
+            Token('ID', 'c', 1, 4),
+            Token('ASSIGN', '=', 1, 6),
+            Token('CHAR', "'a'", 1, 8),
+            Token('EOF', None, 1, 11)
+        ]
+        self.assertTokensEqual(tokenize(code), expected)
+
+    def test_char_with_escapes(self):
+        """Tests char literals with various escape sequences."""
+        code = r"'\'' '\\' '\n' '\t'"
+        expected = [
+            Token('CHAR', r"'\''", 1, 0),
+            Token('CHAR', r"'\\'", 1, 5),
+            Token('CHAR', r"'\n'", 1, 10),
+            Token('CHAR', r"'\t'", 1, 15),
+            Token('EOF', None, 1, 19)
         ]
         self.assertTokensEqual(tokenize(code), expected)
 

@@ -15,7 +15,12 @@ class Parser:
         self.pos = 0
         self.fn_name = ""
         self.variables = {}
-        self.env = {}
+        # Add helper functions to global environment scope
+        self.env = {
+            "concat": "char*",
+            "ctos": "char*",
+            "itos": "char*"
+        }
 
     # Returns kind of the next token
     def peek(self):
@@ -70,18 +75,41 @@ class Parser:
             ptype = 'int'
             if self.peek() == 'TYPE':
                 ptype = self.expect('TYPE')[1]
-            params.append((ptype, self.expect('ID')[1]))
+            pname = self.expect('ID')[1]
+
+            # Handle array parameters
+            parray_part = ""  # This will store "[]" or "[1000]"
+            if self.peek() == 'LSQUARE':
+                self.expect('LSQUARE')
+
+                size_str = ""  # Default: empty brackets []
+                if self.peek() == 'NUMBER':
+                    # Get the size, e.g., "1000"
+                    size_str = str(self.next()[1])
+
+                self.expect('RSQUARE')
+                parray_part = f'[{size_str}]'
+
+            params.append((ptype, pname, parray_part))
             if self.peek() == 'COMMA':
                 self.next()
 
         self.expect('RPAREN')
         self.expect('LBRACE')
-        self.variables = {p: t for t, p in params}
+
+        self.variables = {}
+        for ptype, pname, parray_part in params:
+            if parray_part:  # If it's an array (parray_part is not "")
+                self.variables[pname] = ptype + '*'  # Store as pointer type
+            else:
+                self.variables[pname] = ptype  # Store as normal type
+
         body = []
         while self.peek() not in ('RBRACE', 'EOF'):
             body.append(self.statement())
         self.expect('RBRACE')
-        param_list = ', '.join(f'{ptype} {pname}' for ptype, pname in params)
+        param_list = ', '.join(
+            f'{ptype} {pname}{parray_part}' for ptype, pname, parray_part in params)
         result = f'{ret_type} {self.fn_name}({param_list}) {{\n'
         result += '\n'.join(' ' * indent + '    ' + s for s in body)
         result += '\n}\n'
@@ -168,9 +196,19 @@ class Parser:
             # C code for array declaration
             return f'{var_type} {var_name}[{size}];'
 
+        elif self.peek() == 'SEMICOL':
+            # Variable declaration (no assign)
+            self.next()
+            if var_name in self.variables:
+                raise TypeError(
+                    f'Redefinition of \'{var_name}\', line {line_num}')
+            else:
+                self.variables[var_name] = var_type
+                return f'{var_type} {var_name};'
+
         else:
             raise SyntaxError(
-                f'Expected \'=\' or \'[\' after identifier in let statement, line {line_num}')
+                f'Expected \'=\' or \'[\' after identifier in let statement, got {self.peek()}, line {line_num}')
 
     def print_stmt(self):
         line_num = self.expect('PRINT')[2]
@@ -266,6 +304,7 @@ class Parser:
                 f'Invalid statement start: {name}, line {line_num}')
 
     def if_stmt(self):
+        else_indent = ' '
         indent = self.expect('IF')[3]
         cond = self.expr()[1]
         self.expect('LBRACE')
@@ -276,16 +315,39 @@ class Parser:
         code = f'if ({cond}) {{\n'
         code += '\n'.join(' ' * indent + '    ' + s for s in then_body)
         code += f'\n{' ' * indent}}}'
+
+        # Consume any comments that appear between '}' and 'else'
+        # and append them to the generated code.
+        if self.peek() == 'COMMENT':
+            code += '\n'
+            else_indent = ' ' * indent
+        while self.peek() == 'COMMENT':
+            code += f'{else_indent}{self.comment_stmt()}\n'
+
         if self.peek() == 'ELSE':
             self.next()
-            self.expect('LBRACE')
-            else_body = []
-            while self.peek() not in ('RBRACE', 'EOF'):
-                else_body.append(self.statement())
-            self.expect('RBRACE')
-            code += ' else {\n'
-            code += '\n'.join(' ' * indent + '    ' + s for s in else_body)
-            code += f'\n{' ' * indent}}}'
+            # Check for 'else if'
+            if self.peek() == 'IF':
+                # Prepend ' else ' and the rest is handled by recursion
+                code += f'{else_indent}else {self.if_stmt()}'
+
+            # Check for 'else { ... }'
+            elif self.peek() == 'LBRACE':
+                self.next()
+                else_body = []
+                while self.peek() not in ('RBRACE', 'EOF'):
+                    else_body.append(self.statement())
+                self.expect('RBRACE')
+
+                code += f'{else_indent}else {{\n'
+                code += '\n'.join(' ' * indent + '    ' + s for s in else_body)
+                code += f'\n{' ' * indent}}}'
+
+            else:
+                tok = self.tokens[self.pos]
+                raise SyntaxError(
+                    f"Expected 'if' or '{{' after 'else', got {tok}, line {tok[2]}")
+
         return code
 
     def while_stmt(self):
@@ -325,51 +387,93 @@ class Parser:
         while self.peek() in ('OR', 'AND'):
             op = self.next()[1]
             rhs = self.relational()[1]
-            res_type, result = 'int', f'({result[1]} {op} {rhs})'
+            res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
 
     def relational(self):
         res_type, result = self.additive()
         while self.peek() in ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE'):
-            op = self.next()[1]
+            tok = self.next()
+            op = tok[1]
+            line_num = tok[2]
             rhs_type, rhs = self.additive()
             if res_type == 'char*' and rhs_type == 'char*':
                 if op == "==":
-                    result = 'int', f'(strcmp({result}, {rhs}) == 0)'
+                    rhs_type, result = 'int', f'strcmp({result}, {rhs}) == 0'
                 elif op == '!=':
-                    result = 'int', f'(strcmp({result}, {rhs}) != 0)'
+                    rhs_type, result = 'int', f'strcmp({result}, {rhs}) != 0'
+                else:
+                    raise TypeError(
+                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
             elif res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
-                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
             else:
-                res_type, result = 'int', f'({result} {op} {rhs})'
+                res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
 
     def additive(self):
         res_type, result = self.multiplicative()
         while self.peek() in ('PLUS', 'MINUS'):
-            op = self.next()[1]
+            tok = self.next()
+            op = tok[1]
+            line_num = tok[2]
             rhs_type, rhs = self.multiplicative()
-            if res_type == 'char*' or rhs_type == 'char*':
-                if op == "+":
-                    res_type, result = 'char*', f'({self.string_plus((res_type, result), (rhs_type, rhs))})'
+
+            if res_type == 'int' and rhs_type == 'int':
+                res_type, result = 'int', f'{result} {op} {rhs}'
+            # Check for pointer arithmetic
+            elif (res_type[-1] == '*' and rhs_type == 'int') or \
+                    (res_type == 'int' and rhs_type[-1] == '*'):
+
+                if op == '+':
+                    res_type = res_type if res_type[-1] == '*' else rhs_type
+                    result = f'({result} {op} {rhs})'
                 else:
-                    raise TypeError(
-                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+                    if res_type == 'int':
+                        raise TypeError(
+                            f'Cannot subtract a pointer from an integer, line {line_num}')
+                    # 'ptr - int' is allowed
+                    res_type, result = res_type, f'({result} {op} {rhs})'
+
+            elif res_type == 'char*' and rhs_type == 'char*' and op == "+":
+                res_type, result = res_type, f'concat({result}, {rhs})'
+
             else:
-                res_type, result = 'int', f'({result} {op} {rhs})'
+                raise TypeError(
+                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
+
         return res_type, result
 
     def multiplicative(self):
-        res_type, result = self.atom()
+        res_type, result = self.unary()
         while self.peek() in ('MUL', 'DIV'):
             op = self.next()[1]
-            rhs_type, rhs = self.atom()
+            rhs_type, rhs = self.unary()
             if res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
                     f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
-            res_type, result = 'int', f'({result} {op} {rhs})'
+            res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
+
+    def unary(self):
+        if self.peek() == 'MINUS':
+            op = self.next()
+            line_num = op[2]
+
+            # Recursively call unary() to get the expression to negate.
+            # This correctly handles -x, -(5+10), and even -(-5)
+            expr_type, expr = self.unary()
+
+            # Type check: Can only negate integers.
+            if expr_type != 'int':
+                raise TypeError(
+                    f'Unary operator \'-\' cannot be applied to type \'{expr_type}\', line {line_num}')
+
+            return 'int', f'-{expr}'
+
+        # If no '-', just parse the atom.
+        return self.atom()
 
     def atom(self):
         tok = self.next()
@@ -432,7 +536,7 @@ class Parser:
         elif tok[0] == 'LPAREN':
             expr_type, expr = self.expr()
             self.expect('RPAREN')
-            return expr_type, expr
+            return expr_type, f'({expr})'
         else:
             raise SyntaxError(
                 f'Unexpected token in atom: {tok}, line {tok[2]}')

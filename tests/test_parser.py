@@ -76,7 +76,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         expected_code = (
             'int add(int a, int b) {\n'
-            '    return (a + b);\n'
+            '    return a + b;\n'
             '}\n'
         )
         self.assertEqual(parser.parse(), expected_code)
@@ -96,7 +96,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         expected_code = (
             'char* greet(char* name) {\n'
-            '    return (concat("Hello", name));\n'
+            '    return concat("Hello", name);\n'
             '}\n'
         )
         self.assertEqual(parser.parse(), expected_code)
@@ -162,7 +162,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {'myvar': 'int'}  # Must be defined
         parser.env = {}
 
-        self.assertEqual(parser.statement(), 'myvar = (1 + 2);')
+        self.assertEqual(parser.statement(), 'myvar = 1 + 2;')
 
     def test_id_statement_fn_call(self):
         tokens = [
@@ -190,7 +190,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {'val': 'int'}
         parser.env = {}
 
-        self.assertEqual(parser.statement(), 'printf("%d\\n", (val * 2));')
+        self.assertEqual(parser.statement(), 'printf("%d\\n", val * 2);')
 
     def test_return_statement_int(self):
         tokens = [
@@ -221,7 +221,7 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         parser.variables = {'x': 'int'}
         expected_code = (
-            'if ((x == 1)) {\n'
+            'if (x == 1) {\n'
             '        printf("%d\\n", x);\n'
             '    }'
         )
@@ -245,7 +245,7 @@ class TestParser(unittest.TestCase):
         # y is pre-defined
         parser.variables = {'x': 'int', 'y': 'int'}
         expected_code = (
-            'if ((x > 0)) {\n'
+            'if (x > 0) {\n'
             '        y = 1;\n'  # 'y' is already in variables, so it's a reassignment
             '    } else {\n'
             '        y = 0;\n'
@@ -266,8 +266,8 @@ class TestParser(unittest.TestCase):
         parser = Parser(tokens)
         parser.variables = {'i': 'int'}
         expected_code = (
-            'while ((i < 10)) {\n'
-            '        i = (i + 1);\n'
+            'while (i < 10) {\n'
+            '        i = i + 1;\n'
             '    }'
         )
         self.assertEqual(parser.statement(), expected_code)
@@ -282,7 +282,7 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         # expr() now returns (type, value)
-        self.assertEqual(parser.expr(), ('int', '(1 + (2 * 3))'))
+        self.assertEqual(parser.expr(), ('int', '1 + 2 * 3'))
 
     def test_expression_comparison(self):
         tokens = [
@@ -291,7 +291,7 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         parser.variables = {'a': 'int'}
-        self.assertEqual(parser.expr(), ('int', '(a != 5)'))
+        self.assertEqual(parser.expr(), ('int', 'a != 5'))
 
     def test_expression_parens(self):
         tokens = [
@@ -301,7 +301,7 @@ class TestParser(unittest.TestCase):
                                  0), ('SEMICOL', ';', 1, 0)
         ]
         parser = Parser(tokens)
-        self.assertEqual(parser.expr(), ('int', '((1 + 2) * 3)'))
+        self.assertEqual(parser.expr(), ('int', '(1 + 2) * 3'))
 
     def test_expression_fn_call_atom(self):
         tokens = [
@@ -315,7 +315,7 @@ class TestParser(unittest.TestCase):
         parser.variables = {'a': 'int', 'b': 'int'}
         parser.env = {'call': 'int'}
         # Test atom() (formerly factor())
-        self.assertEqual(parser.atom(), ('int', 'call(a, 10, (b + 5))'))
+        self.assertEqual(parser.atom(), ('int', 'call(a, 10, b + 5)'))
 
     # --- NEW: String and Type Tests ---
 
@@ -374,33 +374,20 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         parser.variables = {'s1': 'char*'}
-        # Test string concatenation helper
-        self.assertEqual(parser.expr(), ('char*', '(concat(s1, " world"))'))
+        self.assertEqual(parser.expr(), ('char*', 'concat(s1, " world")'))
 
-    def test_string_int_concat_expr(self):
+    def test_pointer_arithmetic_expr(self):
+        """Tests that pointer + int arithmetic IS allowed."""
         tokens = [
-            ('STRING', '"val: "', 1, 0), ('PLUS', '+', 1, 0), ('NUMBER', 10, 1, 0),
+            ('ID', 'my_array', 1, 0), ('PLUS', '+', 1, 0), ('NUMBER', 5, 1, 0),
             ('SEMICOL', ';', 1, 0)
         ]
         parser = Parser(tokens)
-        parser.variables = {}
-        # Test string + int concatenation (calls itos)
-        self.assertEqual(
-            parser.expr(), ('char*', '(concat("val: ", itos(10)))'))
+        # my_array is 'int*' (an int array)
+        parser.variables = {'my_array': 'int*'}
 
-    def test_int_string_concat_expr(self):
-        tokens = [
-            ('NUMBER', 10, 1, 0), ('PLUS', '+', 1,
-                                   0), ('STRING', '" bottles"', 1, 0),
-            ('SEMICOL', ';', 1, 0)
-        ]
-        parser = Parser(tokens)
-        parser.variables = {}
-        # Test int + string concatenation (calls itos)
-        self.assertEqual(
-            parser.expr(), ('char*', '(concat(itos(10), " bottles"))'))
-
-    # --- NEW: Array Tests ---
+        # This should correctly generate C pointer math
+        self.assertEqual(parser.expr(), ('int*', '(my_array + 5)'))
 
     def test_let_array_declaration(self):
         tokens = [
@@ -447,7 +434,7 @@ class TestParser(unittest.TestCase):
         ]
         parser = Parser(tokens)
         parser.variables = {'my_arr': 'int*'}
-        self.assertEqual(parser.expr(), ('int', '(my_arr[0] + 1)'))
+        self.assertEqual(parser.expr(), ('int', 'my_arr[0] + 1'))
 
     def test_error_let_array_no_type(self):
         tokens = [
@@ -674,6 +661,74 @@ class TestParser(unittest.TestCase):
             '}\n'
         )
         self.assertEqual(parser.parse(), expected_code)
+
+    def test_if_else_with_comment_before_else(self):
+        """Tests that a comment between '}' and 'else' is parsed correctly."""
+        tokens = [
+            ('IF', 'if', 1, 4), ('ID', 'x', 1,
+                                 4), ('GT', '>', 1, 4), ('NUMBER', 0, 1, 4),
+            ('LBRACE', '{', 1, 4),
+            ('ID', 'x', 2, 6), ('ASSIGN', '=', 2,
+                                6), ('NUMBER', 1, 2, 6), ('SEMICOL', ';', 2, 6),
+            ('RBRACE', '}', 3, 4),
+            ('COMMENT', '// this comment should be preserved', 4, 4),
+            ('ELSE', 'else', 5, 4), ('LBRACE', '{', 5, 4),
+            ('ID', 'x', 6, 6), ('ASSIGN', '=', 6,
+                                6), ('NUMBER', 0, 6, 6), ('SEMICOL', ';', 6, 6),
+            ('RBRACE', '}', 7, 4),
+            ('RBRACE', '}', 8, 0)  # Dummy end of function
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'x': 'int'}
+
+        expected_code = (
+            'if (x > 0) {\n'
+            '        x = 1;\n'
+            '    }\n'
+            '    // this comment should be preserved\n'
+            '    else {\n'
+            '        x = 0;\n'
+            '    }'
+        )
+        self.assertEqual(parser.statement(), expected_code)
+
+    def test_if_else_if_else_statement(self):
+        """Tests a full 'if / else if / else' chain."""
+        tokens = [
+            # if (x == 1) { x = 10; }
+            ('IF', 'if', 1, 4), ('ID', 'x', 1,
+                                 4), ('EQ', '==', 1, 4), ('NUMBER', 1, 1, 4),
+            ('LBRACE', '{', 1, 4),
+            ('ID', 'x', 2, 6), ('ASSIGN', '=', 2,
+                                6), ('NUMBER', 10, 2, 6), ('SEMICOL', ';', 2, 6),
+            ('RBRACE', '}', 3, 4),
+            # else if (x == 2) { x = 20; }
+            ('ELSE', 'else', 3, 4), ('IF', 'if', 3, 4), ('ID',
+                                                         'x', 3, 4), ('EQ', '==', 3, 4), ('NUMBER', 2, 3, 4),
+            ('LBRACE', '{', 3, 4),
+            ('ID', 'x', 4, 6), ('ASSIGN', '=', 4,
+                                6), ('NUMBER', 20, 4, 6), ('SEMICOL', ';', 4, 6),
+            ('RBRACE', '}', 5, 4),
+            # else { x = 30; }
+            ('ELSE', 'else', 5, 4), ('LBRACE', '{', 5, 4),
+            ('ID', 'x', 6, 6), ('ASSIGN', '=', 6,
+                                6), ('NUMBER', 30, 6, 6), ('SEMICOL', ';', 6, 6),
+            ('RBRACE', '}', 7, 4),
+            ('RBRACE', '}', 8, 0)  # Dummy end of function
+        ]
+        parser = Parser(tokens)
+        parser.variables = {'x': 'int'}
+
+        expected_code = (
+            'if (x == 1) {\n'
+            '        x = 10;\n'
+            '    } else if (x == 2) {\n'
+            '        x = 20;\n'
+            '    } else {\n'
+            '        x = 30;\n'
+            '    }'
+        )
+        self.assertEqual(parser.statement(), expected_code)
 
 
 if __name__ == '__main__':
