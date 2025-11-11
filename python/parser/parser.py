@@ -196,9 +196,19 @@ class Parser:
             # C code for array declaration
             return f'{var_type} {var_name}[{size}];'
 
+        elif self.peek() == 'SEMICOL':
+            # Variable declaration
+            self.next()
+            if var_name in self.variables:
+                raise TypeError(
+                    f'Redefinition of \'{var_name}\', line {line_num}')
+            else:
+                self.variables[var_name] = var_type
+                return f'{var_type} {var_name};'
+
         else:
             raise SyntaxError(
-                f'Expected \'=\' or \'[\' after identifier in let statement, line {line_num}')
+                f'Expected \'=\' or \'[\' after identifier in let statement, got {self.peek()}, line {line_num}')
 
     def print_stmt(self):
         line_num = self.expect('PRINT')[2]
@@ -439,6 +449,9 @@ class Parser:
         line_num = tok[2]
         if tok[0] == 'NUMBER':
             return 'int', var_name
+        elif tok[0] == 'MINUS':
+            var_name = self.next()[1]
+            return 'int', f'-{var_name}'
         elif tok[0] == 'CHAR':
             return 'char', var_name
         elif tok[0] == 'STRING':
