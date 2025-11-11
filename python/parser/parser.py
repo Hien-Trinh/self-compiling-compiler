@@ -197,7 +197,7 @@ class Parser:
             return f'{var_type} {var_name}[{size}];'
 
         elif self.peek() == 'SEMICOL':
-            # Variable declaration
+            # Variable declaration (no assign)
             self.next()
             if var_name in self.variables:
                 raise TypeError(
@@ -393,16 +393,21 @@ class Parser:
     def relational(self):
         res_type, result = self.additive()
         while self.peek() in ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE'):
-            op = self.next()[1]
+            tok = self.next()
+            op = tok[1]
+            line_num = tok[2]
             rhs_type, rhs = self.additive()
             if res_type == 'char*' and rhs_type == 'char*':
                 if op == "==":
                     rhs_type, result = 'int', f'strcmp({result}, {rhs}) == 0'
                 elif op == '!=':
                     rhs_type, result = 'int', f'strcmp({result}, {rhs}) != 0'
+                else:
+                    raise TypeError(
+                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
             elif res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
-                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
             else:
                 res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
@@ -410,38 +415,65 @@ class Parser:
     def additive(self):
         res_type, result = self.multiplicative()
         while self.peek() in ('PLUS', 'MINUS'):
-            op = self.next()[1]
+            tok = self.next()
+            op = tok[1]
+            line_num = tok[2]
             rhs_type, rhs = self.multiplicative()
+
+            if res_type == 'int' and rhs_type == 'int':
+                res_type, result = 'int', f'{result} {op} {rhs}'
             # Check for pointer arithmetic
-            if (res_type == 'char*' and rhs_type == 'int') or \
-               (res_type == 'int' and rhs_type == 'char*'):
+            elif (res_type[-1] == '*' and rhs_type == 'int') or \
+                    (res_type == 'int' and rhs_type[-1] == '*'):
 
                 if op == '+':
-                    res_type, result = 'char*', f'({result} {op} {rhs})'
+                    res_type = res_type if res_type[-1] == '*' else rhs_type
+                    result = f'({result} {op} {rhs})'
                 else:
-                    raise TypeError(
-                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+                    if res_type == 'int':
+                        raise TypeError(
+                            f'Cannot subtract a pointer from an integer, line {line_num}')
+                    # 'ptr - int' is allowed
+                    res_type, result = res_type, f'({result} {op} {rhs})'
 
-            elif res_type == 'char*' or rhs_type == 'char*':
-                if op == "+":
-                    res_type, result = 'char*', f'{self.string_plus((res_type, result), (rhs_type, rhs))}'
-                else:
-                    raise TypeError(
-                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
+            elif res_type == 'char*' and rhs_type == 'char*' and op == "+":
+                res_type, result = res_type, f'concat({result}, {rhs})'
+
             else:
-                res_type, result = 'int', f'{result} {op} {rhs}'
+                raise TypeError(
+                    f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
+
         return res_type, result
 
     def multiplicative(self):
-        res_type, result = self.atom()
+        res_type, result = self.unary()
         while self.peek() in ('MUL', 'DIV'):
             op = self.next()[1]
-            rhs_type, rhs = self.atom()
+            rhs_type, rhs = self.unary()
             if res_type == 'char*' or rhs_type == 'char*':
                 raise TypeError(
                     f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\'')
             res_type, result = 'int', f'{result} {op} {rhs}'
         return res_type, result
+
+    def unary(self):
+        if self.peek() == 'MINUS':
+            op = self.next()
+            line_num = op[2]
+
+            # Recursively call unary() to get the expression to negate.
+            # This correctly handles -x, -(5+10), and even -(-5)
+            expr_type, expr = self.unary()
+
+            # Type check: Can only negate integers.
+            if expr_type != 'int':
+                raise TypeError(
+                    f'Unary operator \'-\' cannot be applied to type \'{expr_type}\', line {line_num}')
+
+            return 'int', f'-{expr}'
+
+        # If no '-', just parse the atom.
+        return self.atom()
 
     def atom(self):
         tok = self.next()
@@ -449,9 +481,6 @@ class Parser:
         line_num = tok[2]
         if tok[0] == 'NUMBER':
             return 'int', var_name
-        elif tok[0] == 'MINUS':
-            var_name = self.next()[1]
-            return 'int', f'-{var_name}'
         elif tok[0] == 'CHAR':
             return 'char', var_name
         elif tok[0] == 'STRING':
