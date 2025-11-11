@@ -75,18 +75,41 @@ class Parser:
             ptype = 'int'
             if self.peek() == 'TYPE':
                 ptype = self.expect('TYPE')[1]
-            params.append((ptype, self.expect('ID')[1]))
+            pname = self.expect('ID')[1]
+
+            # Handle array parameters
+            parray_part = ""  # This will store "[]" or "[1000]"
+            if self.peek() == 'LSQUARE':
+                self.expect('LSQUARE')
+
+                size_str = ""  # Default: empty brackets []
+                if self.peek() == 'NUMBER':
+                    # Get the size, e.g., "1000"
+                    size_str = str(self.next()[1])
+
+                self.expect('RSQUARE')
+                parray_part = f'[{size_str}]'
+
+            params.append((ptype, pname, parray_part))
             if self.peek() == 'COMMA':
                 self.next()
 
         self.expect('RPAREN')
         self.expect('LBRACE')
-        self.variables = {p: t for t, p in params}
+
+        self.variables = {}
+        for ptype, pname, parray_part in params:
+            if parray_part:  # If it's an array (parray_part is not "")
+                self.variables[pname] = ptype + '*'  # Store as pointer type
+            else:
+                self.variables[pname] = ptype  # Store as normal type
+
         body = []
         while self.peek() not in ('RBRACE', 'EOF'):
             body.append(self.statement())
         self.expect('RBRACE')
-        param_list = ', '.join(f'{ptype} {pname}' for ptype, pname in params)
+        param_list = ', '.join(
+            f'{ptype} {pname}{parray_part}' for ptype, pname, parray_part in params)
         result = f'{ret_type} {self.fn_name}({param_list}) {{\n'
         result += '\n'.join(' ' * indent + '    ' + s for s in body)
         result += '\n}\n'
