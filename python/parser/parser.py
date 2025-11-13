@@ -15,7 +15,7 @@ class Parser:
         self.pos = 0
         self.fn_name = ""
         self.variables = {}
-        # Add helper functions to global environment scope
+        # Add helper functions to global environment
         self.env = {
             "concat": "char*",
             "ctos": "char*",
@@ -54,7 +54,7 @@ class Parser:
         if t == 'FN':
             return self.fn_decl()
         elif t == 'LET':
-            return self.let_stmt('global')
+            return self.let_stmt(True)
         elif self.peek() == 'COMMENT':
             return self.comment_stmt()
         else:
@@ -145,7 +145,7 @@ class Parser:
     def statement(self):
         t = self.peek()
         if t == 'LET':
-            return self.let_stmt('local')
+            return self.let_stmt(False)
         elif t == 'PRINT':
             return self.print_stmt()
         elif t == 'IF':
@@ -161,7 +161,7 @@ class Parser:
         else:
             raise SyntaxError(f'Unexpected statement: {t}')
 
-    def let_stmt(self, scope):
+    def let_stmt(self, is_global):
         line_num = self.expect('LET')[2]
         # Set variable type to undefined as default
         var_type = 'undefined'
@@ -183,7 +183,7 @@ class Parser:
                     f'Incompatible {rhs_type} to {var_type} conversion, line {line_num}')
 
             self.expect('SEMICOL')
-            if scope == 'local':
+            if not is_global:
                 if var_name in self.variables:
                     if self.variables[var_name] == var_type:
                         return f'{var_name} = {rhs_expr};'
@@ -220,16 +220,16 @@ class Parser:
             self.expect('RSQUARE')
             self.expect('SEMICOL')
 
-            if scope == 'local' and var_name in self.variables:
+            if not is_global and var_name in self.variables:
                 raise TypeError(
                     f'Redefinition of \'{var_name}\', line {line_num}')
-            elif scope == 'gloval' and var_name in self.env:
+            elif is_global and var_name in self.env:
                 raise TypeError(
                     f'Redefinition of \'{var_name}\', line {line_num}')
 
             # Store array type as 'base_type*' (e.g., 'int*')
             array_type = var_type + '*'
-            if scope == 'local':
+            if not is_global:
                 self.variables[var_name] = array_type
             else:
                 self.env[var_name] = array_type
@@ -240,7 +240,7 @@ class Parser:
         elif self.peek() == 'SEMICOL':
             # Variable declaration (no assign)
             self.next()
-            if scope == 'local':
+            if not is_global:
                 if var_name in self.variables:
                     raise TypeError(
                         f'Redefinition of \'{var_name}\', line {line_num}')
@@ -320,17 +320,18 @@ class Parser:
 
         elif self.peek() == 'LSQUARE':
             # Array assignment
-            self.next()
-
-            if name not in self.variables and name not in self.env:
+            # Check type. Must be a pointer type, e.g., 'int*'
+            var_type = None
+            if name in self.variables:
+                var_type = self.variables[name]
+            elif name in self.env:
+                var_type = self.env[name]
+            else:
                 raise SyntaxError(
                     f'Undeclared identifier, {name}, line {line_num}')
 
-            # Check type. Must be a pointer type, e.g., 'int*'
-            if name in self.variables:
-                var_type = self.variables[name]
-            else:
-                var_type = self.env[name]
+            self.next()
+
             if not var_type[-1] == '*':
                 raise TypeError(
                     f'Variable \'{name}\' is not an array and cannot be indexed, line {line_num}')

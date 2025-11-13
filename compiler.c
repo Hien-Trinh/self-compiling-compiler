@@ -204,57 +204,7 @@ int tokenize(char* source_code) {
             }
                  token_count = token_count + 1;
              }
-             // --- 4. Check for Single-Char Tokens ---
-             else if (c == '(') {
-                 add_simple_token(token_count, "LPAREN", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == ')') {
-                 add_simple_token(token_count, "RPAREN", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == '{') {
-                 add_simple_token(token_count, "LBRACE", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == '}') {
-                 add_simple_token(token_count, "RBRACE", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == '[') {
-                 add_simple_token(token_count, "LSQUARE", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == ']') {
-                 add_simple_token(token_count, "RSQUARE", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == '+') {
-                 add_simple_token(token_count, "PLUS", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == '-') {
-                 add_simple_token(token_count, "MINUS", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == '*') {
-                 add_simple_token(token_count, "MUL", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == '/') {
-                 add_simple_token(token_count, "DIV", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == ';') {
-                 add_simple_token(token_count, "SEMICOL", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             } else if (c == ',') {
-                 add_simple_token(token_count, "COMMA", line_num, col);
-                 token_count = token_count + 1;
-                 pos = pos + 1;
-             }
-             // --- 5. Check for Multi-Char Tokens ---
+             // --- 4. Check for Multi-Char Tokens ---
              else if (c == '=') {
                  if (source_code[pos + 1] == '=') {
                 add_simple_token(token_count, "EQ", line_num, col);
@@ -297,6 +247,66 @@ int tokenize(char* source_code) {
                  add_simple_token(token_count, "OR", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 2;
+             } else if (c == '/') {
+                 if (source_code[pos + 1] == '/') {
+                add_simple_token(token_count, "COMMENT", line_num, col);
+                token_count = token_count + 1;
+                pos = pos + 2;
+                // Loop to skip till after newline or EOL
+                while (source_code[pos] != '\n') {
+                    pos = pos + 1;
+                }
+            } else {
+                add_simple_token(token_count, "DIV", line_num, col);
+                token_count = token_count + 1;
+                pos = pos + 1;
+            }
+             }
+             // --- 5. Check for Single-Char Tokens ---
+             else if (c == '(') {
+                 add_simple_token(token_count, "LPAREN", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == ')') {
+                 add_simple_token(token_count, "RPAREN", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == '{') {
+                 add_simple_token(token_count, "LBRACE", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == '}') {
+                 add_simple_token(token_count, "RBRACE", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == '[') {
+                 add_simple_token(token_count, "LSQUARE", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == ']') {
+                 add_simple_token(token_count, "RSQUARE", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == '+') {
+                 add_simple_token(token_count, "PLUS", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == '-') {
+                 add_simple_token(token_count, "MINUS", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == '*') {
+                 add_simple_token(token_count, "MUL", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == ';') {
+                 add_simple_token(token_count, "SEMICOL", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
+             } else if (c == ',') {
+                 add_simple_token(token_count, "COMMA", line_num, col);
+                 token_count = token_count + 1;
+                 pos = pos + 1;
              }
              // --- 6. Handle Strings and Chars ---
              else if (c == '"') {
