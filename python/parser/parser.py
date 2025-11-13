@@ -58,7 +58,9 @@ class Parser:
         if self.peek() == 'COMMENT':
             return self.comment_stmt()
 
-        indent = self.expect('FN')[3]
+        tok = self.expect('FN')
+        line_num = tok[2]
+        indent = tok[3]
 
         ret_type = 'int'  # Set default return type to int if no type given
         if self.peek() == 'TYPE':
@@ -95,25 +97,38 @@ class Parser:
                 self.next()
 
         self.expect('RPAREN')
-        self.expect('LBRACE')
 
-        self.variables = {}
-        for ptype, pname, parray_part in params:
-            if parray_part:  # If it's an array (parray_part is not "")
-                self.variables[pname] = ptype + '*'  # Store as pointer type
-            else:
-                self.variables[pname] = ptype  # Store as normal type
-
-        body = []
-        while self.peek() not in ('RBRACE', 'EOF'):
-            body.append(self.statement())
-        self.expect('RBRACE')
         param_list = ', '.join(
             f'{ptype} {pname}{parray_part}' for ptype, pname, parray_part in params)
-        result = f'{ret_type} {self.fn_name}({param_list}) {{\n'
-        result += '\n'.join(' ' * indent + '    ' + s for s in body)
-        result += '\n}\n'
-        return result
+
+        if self.peek() == 'SEMICOL':
+            # Function Declaration
+            self.next()
+            result = f'{ret_type} {self.fn_name}({param_list});'
+            return result
+
+        elif self.peek() == 'LBRACE':
+            self.next()
+            self.variables = {}
+            for ptype, pname, parray_part in params:
+                if parray_part:  # If it's an array (parray_part is not "")
+                    self.variables[pname] = ptype + \
+                        '*'  # Store as pointer type
+                else:
+                    self.variables[pname] = ptype  # Store as normal type
+
+            body = []
+            while self.peek() not in ('RBRACE', 'EOF'):
+                body.append(self.statement())
+            self.expect('RBRACE')
+            result = f'{ret_type} {self.fn_name}({param_list}) {{\n'
+            result += '\n'.join(' ' * indent + '    ' + s for s in body)
+            result += '\n}\n'
+            return result
+
+        else:
+            raise SyntaxError(
+                f'Expected \';\' or \'{{\' after function declaration, got {self.peek()}, line {line_num}')
 
     # ==============================================================
     # Statements

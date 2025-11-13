@@ -121,6 +121,32 @@ class TestParser(unittest.TestCase):
         )
         self.assertEqual(parser.parse(), expected_code)
 
+    def test_fn_declaration_prototype(self):
+        """Tests parsing a function prototype (declaration without a body)."""
+        tokens = [
+            ('FN', 'ah', 1, 0), ('TYPE', 'int*', 1, 0), ('ID', 'my_func', 1, 0),
+            ('LPAREN', '(', 1, 0),
+            ('TYPE', 'int', 1, 0), ('ID', 'a', 1, 0), ('COMMA', ',', 1, 0),
+            ('TYPE', 'char*', 1, 0), ('ID', 'arr', 1, 0), ('LSQUARE',
+                                                           '[', 1, 0), ('NUMBER', 10, 1, 0), ('RSQUARE', ']', 1, 0),
+            ('RPAREN', ')', 1, 0),
+            ('SEMICOL', ';', 1, 0),  # Semicolon instead of brace
+            self.eof_token
+        ]
+        parser = Parser(tokens)
+
+        # We call parse() which calls fn_decl()
+        expected_code = (
+            "int* my_func(int a, char* arr[10]);"
+        )
+
+        # We must .strip() because parse() adds a newline
+        self.assertEqual(parser.parse().strip(), expected_code)
+
+        # Also check that the function is in the global env
+        self.assertIn('my_func', parser.env)
+        self.assertEqual(parser.env['my_func'], 'int*')
+
     # --- Statement Tests (Updated) ---
 
     def test_let_statement_new_var(self):

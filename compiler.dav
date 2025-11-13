@@ -4,78 +4,67 @@
 // This file is compiled by the Stage 0 Python compiler.
 
 // =============================================================
-// Lexer Helpers
-//
-// We port the logic from the Python lexer.
+// Function Declarations
 // =============================================================
 
-ah int is_letter(char c) {
-    // Checks if a character is a letter or underscore.
-    // Corresponds to: [A-Za-z_]
-    return (c >= 'a' && c <= 'z') || 
-           (c >= 'A' && c <= 'Z') || 
-           (c == '_');
-}
+ah int is_letter(char c);
+ah int is_digit(char c);
+ah int is_space(char c);
+ah int is_ident_char(char c);
+ah char* check_keywords(char* s);
+ah int add_simple_token(char* token_types[1000], int token_values[1000],
+                        int token_lines[1000], int token_cols[1000],
+                        int index, char* type, int line, int col);
+ah int tokenize(char* source_code, char* token_types[1000],
+                int token_values[1000], int token_lines[1000], 
+                int token_cols[1000], char token_pool[50000]);
 
-ah int is_digit(char c) {
-    // Checks if a character is a 0-9 digit.
-    // Corresponds to: \d
-    return (c >= '0' && c <= '9');
-}
+// =============================================================
+// Main Entry Point
+// =============================================================
 
-ah int is_space(char c) {
-    // Checks for whitespace characters to skip.
-    // Corresponds to: [ \t\n]
-    return (c == ' ') || (c == '\t') || (c == '\n');
-}
+ah int main() {
+    // Declare token storage arrays
+    // These arrays will be populated by the tokenizer
+    
+    // Max 1000 tokens
+    beg char* token_types[1000];
+    
+    // token_values stores an *index* into the token_pool
+    // -1 means no value (for single-char tokens)
+    beg int token_values[1000];
+    
+    beg int token_lines[1000];
+    beg int token_cols[1000];
+    
+    // A "string pool" or "arena" for all token values (strings, numbers)
+    // 50k chars should be enough for this compiler
+    beg char token_pool[50000];
 
-ah int is_ident_char(char c) {
-    // Checks if a char can be part of an identifier *after* the first char.
-    // Corresponds to: [A-Za-z0-9_]
-    return is_letter(c) || is_digit(c);
-}
-
-ah char* check_keywords(char* s) {
-    // Checks if a string 's' is a keyword.
-    // If it is, return the keyword's Token Type.
-    // Otherwise, return "ID".
-    if s == "ah" {
-        return "FN";
+    
+    // A simple test of the tokenizer
+    beg char* code = "ah main() { beg x = 123.45; }";
+    beg int n_tokens = tokenize(code, token_types, token_values, token_lines, token_cols, token_pool);
+    
+    // Print the tokens we stored
+    boo("--- Stored Tokens ---");
+    beg int i = 0;
+    beg char* type;
+    beg int val_idx;
+    while i < n_tokens {
+        type = token_types[i];
+        val_idx = token_values[i];
+        
+        boo(type);
+        if val_idx != -1 {
+            boo(token_pool + val_idx);
+        }
+        
+        i = i + 1;
     }
-    else if s == "beg" {
-        return "LET";
-    }
-    else if s == "boo" {
-        return "PRINT";
-    }
-    else if s == "if" {
-        return "IF";
-    }
-    else if s == "else" {
-        return "ELSE";
-    }
-    else if s == "while" {
-        return "WHILE";
-    }
-    else if s == "return" {
-        return "RETURN";
-    }
-
-    // Default case: not a keyword
-    return "ID";
-}
-
-// Helper to add a simple token (without a value) to the token arrays.
-ah int add_simple_token(char* token_types[1000], int token_values[1000], 
-                        int token_lines[1000], int token_cols[1000], 
-                        int index, char* type, int line, int col) {
-    token_types[index] = type;
-    token_values[index] = -1; // -1 means no value
-    token_lines[index] = line;
-    token_cols[index] = col;
+    
     return 0;
 }
-
 
 // =============================================================
 // Tokenizer
@@ -83,12 +72,9 @@ ah int add_simple_token(char* token_types[1000], int token_values[1000],
 // This is the main lexer logic, ported from python/lexer/lexer.py
 // =============================================================
 
-ah int tokenize(char* source_code,
-                char* token_types[1000],
-                int token_values[1000], 
-                int token_lines[1000], 
-                int token_cols[1000],
-                char token_pool[50000]) {
+ah int tokenize(char* source_code, char* token_types[1000],
+                int token_values[1000], int token_lines[1000], 
+                int token_cols[1000], char token_pool[50000]) {
 
     beg int pos = 0;
     beg int line_num = 1;
@@ -348,50 +334,76 @@ ah int tokenize(char* source_code,
     return token_count;
 }
 
-
 // =============================================================
-// Main Entry Point
+// Lexer Helpers
+//
+// We port the logic from the Python lexer.
 // =============================================================
 
-ah int main() {
-    // Declare token storage arrays
-    // These arrays will be populated by the tokenizer
-    
-    // Max 1000 tokens
-    beg char* token_types[1000];
-    
-    // token_values stores an *index* into the token_pool
-    // -1 means no value (for single-char tokens)
-    beg int token_values[1000];
-    
-    beg int token_lines[1000];
-    beg int token_cols[1000];
-    
-    // A "string pool" or "arena" for all token values (strings, numbers)
-    // 50k chars should be enough for this compiler
-    beg char token_pool[50000];
+ah int is_letter(char c) {
+    // Checks if a character is a letter or underscore.
+    // Corresponds to: [A-Za-z_]
+    return (c >= 'a' && c <= 'z') || 
+           (c >= 'A' && c <= 'Z') || 
+           (c == '_');
+}
 
-    
-    // A simple test of the tokenizer
-    beg char* code = "ah main() { beg x = 123.45; }";
-    beg int n_tokens = tokenize(code, token_types, token_values, token_lines, token_cols, token_pool);
-    
-    // Print the tokens we stored
-    boo("--- Stored Tokens ---");
-    beg int i = 0;
-    beg char* type;
-    beg int val_idx;
-    while i < n_tokens {
-        type = token_types[i];
-        val_idx = token_values[i];
-        
-        boo(type);
-        if val_idx != -1 {
-            boo(token_pool + val_idx);
-        }
-        
-        i = i + 1;
+ah int is_digit(char c) {
+    // Checks if a character is a 0-9 digit.
+    // Corresponds to: \d
+    return (c >= '0' && c <= '9');
+}
+
+ah int is_space(char c) {
+    // Checks for whitespace characters to skip.
+    // Corresponds to: [ \t\n]
+    return (c == ' ') || (c == '\t') || (c == '\n');
+}
+
+ah int is_ident_char(char c) {
+    // Checks if a char can be part of an identifier *after* the first char.
+    // Corresponds to: [A-Za-z0-9_]
+    return is_letter(c) || is_digit(c);
+}
+
+ah char* check_keywords(char* s) {
+    // Checks if a string 's' is a keyword.
+    // If it is, return the keyword's Token Type.
+    // Otherwise, return "ID".
+    if s == "ah" {
+        return "FN";
     }
-    
+    else if s == "beg" {
+        return "LET";
+    }
+    else if s == "boo" {
+        return "PRINT";
+    }
+    else if s == "if" {
+        return "IF";
+    }
+    else if s == "else" {
+        return "ELSE";
+    }
+    else if s == "while" {
+        return "WHILE";
+    }
+    else if s == "return" {
+        return "RETURN";
+    }
+
+    // Default case: not a keyword
+    return "ID";
+}
+
+// Helper to add a simple token (without a value) to the token arrays.
+ah int add_simple_token(char* token_types[1000], int token_values[1000], 
+                        int token_lines[1000], int token_cols[1000], 
+                        int index, char* type, int line, int col) {
+    token_types[index] = type;
+    token_values[index] = -1; // -1 means no value
+    token_lines[index] = line;
+    token_cols[index] = col;
     return 0;
 }
+

@@ -10,65 +10,48 @@ char* ctos(char c);
 // Description: Stage 1 compiler for the dav language.
 // This file is compiled by the Stage 0 Python compiler.
 // =============================================================
-// Lexer Helpers
-//
-// We port the logic from the Python lexer.
+// Function Declarations
 // =============================================================
-int is_letter(char c) {
-    // Checks if a character is a letter or underscore.
-    // Corresponds to: [A-Za-z_]
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
-}
-
-int is_digit(char c) {
-    // Checks if a character is a 0-9 digit.
-    // Corresponds to: \d
-    return (c >= '0' && c <= '9');
-}
-
-int is_space(char c) {
-    // Checks for whitespace characters to skip.
-    // Corresponds to: [ \t\n]
-    return (c == ' ') || (c == '\t') || (c == '\n');
-}
-
-int is_ident_char(char c) {
-    // Checks if a char can be part of an identifier *after* the first char.
-    // Corresponds to: [A-Za-z0-9_]
-    return is_letter(c) || is_digit(c);
-}
-
-char* check_keywords(char* s) {
-    // Checks if a string 's' is a keyword.
-    // If it is, return the keyword's Token Type.
-    // Otherwise, return "ID".
-    if (strcmp(s, "ah") == 0) {
-        return "FN";
-    } else if (strcmp(s, "beg") == 0) {
-             return "LET";
-         } else if (strcmp(s, "boo") == 0) {
-             return "PRINT";
-         } else if (strcmp(s, "if") == 0) {
-             return "IF";
-         } else if (strcmp(s, "else") == 0) {
-             return "ELSE";
-         } else if (strcmp(s, "while") == 0) {
-             return "WHILE";
-         } else if (strcmp(s, "return") == 0) {
-             return "RETURN";
-         }
-         // Default case: not a keyword
-
-    return "ID";
-}
-
-// Helper to add a simple token (without a value) to the token arrays.
-int add_simple_token(char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], int index, char* type, int line, int col) {
-    token_types[index] = type;
-    token_values[index] = -1;
-    // -1 means no value
-    token_lines[index] = line;
-    token_cols[index] = col;
+int is_letter(char c);
+int is_digit(char c);
+int is_space(char c);
+int is_ident_char(char c);
+char* check_keywords(char* s);
+int add_simple_token(char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], int index, char* type, int line, int col);
+int tokenize(char* source_code, char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], char token_pool[50000]);
+// =============================================================
+// Main Entry Point
+// =============================================================
+int main() {
+    // Declare token storage arrays
+    // These arrays will be populated by the tokenizer
+    // Max 1000 tokens
+    char* token_types[1000];
+    // token_values stores an *index* into the token_pool
+    // -1 means no value (for single-char tokens)
+    int token_values[1000];
+    int token_lines[1000];
+    int token_cols[1000];
+    // A "string pool" or "arena" for all token values (strings, numbers)
+    // 50k chars should be enough for this compiler
+    char token_pool[50000];
+    // A simple test of the tokenizer
+    char* code = "ah main() { beg x = 123.45; }";
+    int n_tokens = tokenize(code, token_types, token_values, token_lines, token_cols, token_pool);
+    // Print the tokens we stored
+    printf("%s\n", "--- Stored Tokens ---");
+    int i = 0;
+    char* type;
+    int val_idx;
+    while (i < n_tokens) {
+        type = token_types[i];
+        val_idx = token_values[i];
+        printf("%s\n", type);
+        if (val_idx != -1) {
+            printf("%s\n", (token_pool + val_idx));
+        }
+        i = i + 1;
+    }
     return 0;
 }
 
@@ -354,38 +337,65 @@ int tokenize(char* source_code, char* token_types[1000], int token_values[1000],
 }
 
 // =============================================================
-// Main Entry Point
+// Lexer Helpers
+//
+// We port the logic from the Python lexer.
 // =============================================================
-int main() {
-    // Declare token storage arrays
-    // These arrays will be populated by the tokenizer
-    // Max 1000 tokens
-    char* token_types[1000];
-    // token_values stores an *index* into the token_pool
-    // -1 means no value (for single-char tokens)
-    int token_values[1000];
-    int token_lines[1000];
-    int token_cols[1000];
-    // A "string pool" or "arena" for all token values (strings, numbers)
-    // 50k chars should be enough for this compiler
-    char token_pool[50000];
-    // A simple test of the tokenizer
-    char* code = "ah main() { beg x = 123.45; }";
-    int n_tokens = tokenize(code, token_types, token_values, token_lines, token_cols, token_pool);
-    // Print the tokens we stored
-    printf("%s\n", "--- Stored Tokens ---");
-    int i = 0;
-    char* type;
-    int val_idx;
-    while (i < n_tokens) {
-        type = token_types[i];
-        val_idx = token_values[i];
-        printf("%s\n", type);
-        if (val_idx != -1) {
-            printf("%s\n", (token_pool + val_idx));
-        }
-        i = i + 1;
-    }
+int is_letter(char c) {
+    // Checks if a character is a letter or underscore.
+    // Corresponds to: [A-Za-z_]
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
+}
+
+int is_digit(char c) {
+    // Checks if a character is a 0-9 digit.
+    // Corresponds to: \d
+    return (c >= '0' && c <= '9');
+}
+
+int is_space(char c) {
+    // Checks for whitespace characters to skip.
+    // Corresponds to: [ \t\n]
+    return (c == ' ') || (c == '\t') || (c == '\n');
+}
+
+int is_ident_char(char c) {
+    // Checks if a char can be part of an identifier *after* the first char.
+    // Corresponds to: [A-Za-z0-9_]
+    return is_letter(c) || is_digit(c);
+}
+
+char* check_keywords(char* s) {
+    // Checks if a string 's' is a keyword.
+    // If it is, return the keyword's Token Type.
+    // Otherwise, return "ID".
+    if (strcmp(s, "ah") == 0) {
+        return "FN";
+    } else if (strcmp(s, "beg") == 0) {
+             return "LET";
+         } else if (strcmp(s, "boo") == 0) {
+             return "PRINT";
+         } else if (strcmp(s, "if") == 0) {
+             return "IF";
+         } else if (strcmp(s, "else") == 0) {
+             return "ELSE";
+         } else if (strcmp(s, "while") == 0) {
+             return "WHILE";
+         } else if (strcmp(s, "return") == 0) {
+             return "RETURN";
+         }
+         // Default case: not a keyword
+
+    return "ID";
+}
+
+// Helper to add a simple token (without a value) to the token arrays.
+int add_simple_token(char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], int index, char* type, int line, int col) {
+    token_types[index] = type;
+    token_values[index] = -1;
+    // -1 means no value
+    token_lines[index] = line;
+    token_cols[index] = col;
     return 0;
 }
 
