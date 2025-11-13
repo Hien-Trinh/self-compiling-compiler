@@ -43,11 +43,22 @@ class Parser:
     def parse(self):
         code = []
         while self.peek() != 'EOF':
-            code.append(self.fn_decl())
+            code.append(self.global_decl())
         return '\n'.join(code)
 
     # ==============================================================
     # Functions
+
+    def global_decl(self):
+        t = self.peek()
+        if t == 'FN':
+            return self.fn_decl()
+        elif t == 'LET':
+            return self.let_stmt('global')
+        elif self.peek() == 'COMMENT':
+            return self.comment_stmt()
+        else:
+            raise SyntaxError(f'Unexpected statement: {t}')
 
     def fn_decl(self):
         """
@@ -55,8 +66,6 @@ class Parser:
             body;
         }
         """
-        if self.peek() == 'COMMENT':
-            return self.comment_stmt()
 
         tok = self.expect('FN')
         line_num = tok[2]
@@ -136,7 +145,7 @@ class Parser:
     def statement(self):
         t = self.peek()
         if t == 'LET':
-            return self.let_stmt()
+            return self.let_stmt('local')
         elif t == 'PRINT':
             return self.print_stmt()
         elif t == 'IF':
@@ -152,7 +161,7 @@ class Parser:
         else:
             raise SyntaxError(f'Unexpected statement: {t}')
 
-    def let_stmt(self):
+    def let_stmt(self, scope):
         line_num = self.expect('LET')[2]
         # Set variable type to undefined as default
         var_type = 'undefined'
@@ -174,15 +183,26 @@ class Parser:
                     f'Incompatible {rhs_type} to {var_type} conversion, line {line_num}')
 
             self.expect('SEMICOL')
-            if var_name in self.variables:
-                if self.variables[var_name] == var_type:
-                    return f'{var_name} = {rhs_expr};'
+            if scope == 'local':
+                if var_name in self.variables:
+                    if self.variables[var_name] == var_type:
+                        return f'{var_name} = {rhs_expr};'
+                    else:
+                        raise TypeError(
+                            f'Redefinition of \'{var_name}\' with a different type: \'{var_type}\' vs \'{self.variables[var_name]}\', line {line_num}')
                 else:
-                    raise TypeError(
-                        f'Redefinition of \'{var_name}\' with a different type: \'{var_type}\' vs \'{self.variables[var_name]}\', line {line_num}')
+                    self.variables[var_name] = var_type
+                    return f'{var_type} {var_name} = {rhs_expr};'
             else:
-                self.variables[var_name] = var_type
-                return f'{var_type} {var_name} = {rhs_expr};'
+                if var_name in self.env:
+                    if self.env[var_name] == var_type:
+                        return f'{var_name} = {rhs_expr};'
+                    else:
+                        raise TypeError(
+                            f'Redefinition of \'{var_name}\' with a different type: \'{var_type}\' vs \'{self.env[var_name]}\', line {line_num}')
+                else:
+                    self.env[var_name] = var_type
+                    return f'{var_type} {var_name} = {rhs_expr};'
 
         elif self.peek() == 'LSQUARE':
             # Array declaration
@@ -200,13 +220,19 @@ class Parser:
             self.expect('RSQUARE')
             self.expect('SEMICOL')
 
-            if var_name in self.variables:
+            if scope == 'local' and var_name in self.variables:
+                raise TypeError(
+                    f'Redefinition of \'{var_name}\', line {line_num}')
+            elif scope == 'gloval' and var_name in self.env:
                 raise TypeError(
                     f'Redefinition of \'{var_name}\', line {line_num}')
 
             # Store array type as 'base_type*' (e.g., 'int*')
             array_type = var_type + '*'
-            self.variables[var_name] = array_type
+            if scope == 'local':
+                self.variables[var_name] = array_type
+            else:
+                self.env[var_name] = array_type
 
             # C code for array declaration
             return f'{var_type} {var_name}[{size}];'
@@ -214,12 +240,20 @@ class Parser:
         elif self.peek() == 'SEMICOL':
             # Variable declaration (no assign)
             self.next()
-            if var_name in self.variables:
-                raise TypeError(
-                    f'Redefinition of \'{var_name}\', line {line_num}')
+            if scope == 'local':
+                if var_name in self.variables:
+                    raise TypeError(
+                        f'Redefinition of \'{var_name}\', line {line_num}')
+                else:
+                    self.variables[var_name] = var_type
+                    return f'{var_type} {var_name};'
             else:
-                self.variables[var_name] = var_type
-                return f'{var_type} {var_name};'
+                if var_name in self.env:
+                    raise TypeError(
+                        f'Redefinition of \'{var_name}\', line {line_num}')
+                else:
+                    self.env[var_name] = var_type
+                    return f'{var_type} {var_name};'
 
         else:
             raise SyntaxError(
@@ -249,15 +283,18 @@ class Parser:
         if self.peek() == 'ASSIGN':
             # Variable assignment
             self.next()
-            # Check for assignment: MUST be in local variables
-            if name not in self.variables:
+            # Check for assignment:
+            if name not in self.variables and name not in self.env:
                 raise SyntaxError(
                     f'Undeclared identifier, {name}, line {line_num}')
 
             rhs_type, rhs_expr = self.expr()
-            if self.variables[name] != rhs_type:
+            if name in self.variables and self.variables[name] != rhs_type:
                 raise TypeError(
                     f'Incompatible {rhs_type} to {self.variables[name]} conversion, line {line_num}')
+            elif name in self.env and self.env[name] != rhs_type:
+                raise TypeError(
+                    f'Incompatible {rhs_type} to {self.env[name]} conversion, line {line_num}')
 
             self.expect('SEMICOL')
             return f'{name} = {rhs_expr};'
@@ -285,12 +322,15 @@ class Parser:
             # Array assignment
             self.next()
 
-            if name not in self.variables:
-                raise ReferenceError(
-                    f'Use of undeclared identifier \'{name}\', line {line_num}')
+            if name not in self.variables and name not in self.env:
+                raise SyntaxError(
+                    f'Undeclared identifier, {name}, line {line_num}')
 
             # Check type. Must be a pointer type, e.g., 'int*'
-            var_type = self.variables[name]
+            if name in self.variables:
+                var_type = self.variables[name]
+            else:
+                var_type = self.env[name]
             if not var_type[-1] == '*':
                 raise TypeError(
                     f'Variable \'{name}\' is not an array and cannot be indexed, line {line_num}')
@@ -519,13 +559,17 @@ class Parser:
 
             elif self.peek() == 'LSQUARE':
                 # Array access
-                if var_name not in self.variables:
+                if var_name not in self.variables and var_name not in self.env:
                     raise ReferenceError(
                         f'Use of undeclared identifier \'{var_name}\', line {line_num}')
+                elif var_name in self.variables:
+                    var_type = self.variables[var_name]
+                elif var_name in self.env:
+                    var_type = self.env[var_name]
+
                 self.next()
 
                 # Check type. Must be a pointer type, e.g., 'int*'
-                var_type = self.variables[var_name]
                 if not var_type.endswith('*'):
                     raise TypeError(
                         f'Variable \'{var_name}\' is not an array and cannot be indexed, line {line_num}')
@@ -543,10 +587,13 @@ class Parser:
 
             else:
                 # Just a variable
-                if var_name not in self.variables:
+                if var_name in self.variables:
+                    return self.variables[var_name], var_name
+                elif var_name in self.env:
+                    return self.env[var_name], var_name
+                else:
                     raise ReferenceError(
                         f'Use of undeclared identifier \'{var_name}\', line {line_num}')
-                return self.variables[var_name], var_name
 
         elif tok[0] == 'LPAREN':
             expr_type, expr = self.expr()

@@ -10,6 +10,22 @@ char* ctos(char c);
 // Description: Stage 1 compiler for the dav language.
 // This file is compiled by the Stage 0 Python compiler.
 // =============================================================
+// Global Storage
+// =============================================================
+// --- Tokenizer Storage ---
+char* token_types[1000];
+int token_values[1000];
+// Stores index into token_pool, or -1
+int token_lines[1000];
+int token_cols[1000];
+char token_pool[50000];
+// String pool for token values
+int n_tokens = 0;
+// Total number of tokens found
+// --- Parser State ---
+int parser_pos = 0;
+// Current token index for the parser
+// =============================================================
 // Function Declarations
 // =============================================================
 int is_letter(char c);
@@ -17,42 +33,86 @@ int is_digit(char c);
 int is_space(char c);
 int is_ident_char(char c);
 char* check_keywords(char* s);
-int add_simple_token(char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], int index, char* type, int line, int col);
-int tokenize(char* source_code, char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], char token_pool[50000]);
+int add_simple_token(int index, char* type, int line, int col);
+char* peek();
+int next();
+int expect(char* kind);
+int tokenize(char* source_code);
+int parse(char* c_code, char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], char token_pool[50000]);
 // =============================================================
 // Main Entry Point
 // =============================================================
 int main() {
-    // Declare token storage arrays
-    // These arrays will be populated by the tokenizer
-    // Max 1000 tokens
-    char* token_types[1000];
-    // token_values stores an *index* into the token_pool
-    // -1 means no value (for single-char tokens)
-    int token_values[1000];
-    int token_lines[1000];
-    int token_cols[1000];
-    // A "string pool" or "arena" for all token values (strings, numbers)
-    // 50k chars should be enough for this compiler
-    char token_pool[50000];
-    // A simple test of the tokenizer
-    char* code = "ah main() { beg x = 123.45; }";
-    int n_tokens = tokenize(code, token_types, token_values, token_lines, token_cols, token_pool);
-    // Print the tokens we stored
-    printf("%s\n", "--- Stored Tokens ---");
-    int i = 0;
-    char* type;
-    int val_idx;
-    while (i < n_tokens) {
-        type = token_types[i];
-        val_idx = token_values[i];
-        printf("%s\n", type);
-        if (val_idx != -1) {
-            printf("%s\n", (token_pool + val_idx));
-        }
-        i = i + 1;
-    }
+    // Test code with a comment
+    char* code = "ah main() { // test comment\n beg x = 5; }";
+    // 1. Tokenize
+    // Tokenize populates the global arrays and returns the count
+    n_tokens = tokenize(code);
+    // 2. Parse (Test)
+    printf("%s\n", "--- Starting Parse ---");
+    // Test the new parser helpers
+    expect("FN");
+    expect("ID");
+    expect("LPAREN");
+    expect("RPAREN");
+    expect("LBRACE");
+    // The peek() inside expect() will automatically skip the comment!
+    expect("LET");
+    expect("ID");
+    expect("ASSIGN");
+    expect("NUMBER");
+    expect("SEMICOL");
+    expect("RBRACE");
+    expect("EOF");
+    printf("%s\n", "--- Parse Complete ---");
+    printf("%s\n", "SUCCESS: Parser helpers work.");
     return 0;
+}
+
+// =============================================================
+// Parser Helpers
+// =============================================================
+char* peek() {
+    // Returns the type of the current token.
+    // Automatically skips over any 'COMMENT' tokens.
+    while (strcmp(token_types[parser_pos], "COMMENT") == 0) {
+        parser_pos = parser_pos + 1;
+    }
+    return token_types[parser_pos];
+}
+
+int next() {
+    // Consumes the current token and returns its index.
+    // Make sure to call peek() first to skip comments.
+    // Skips any comments
+    peek();
+    int current_pos = parser_pos;
+    parser_pos = parser_pos + 1;
+    return current_pos;
+}
+
+int expect(char* kind) {
+    // Checks if the current token is of the expected 'kind'.
+    // If yes, consumes it and returns its index.
+    // If no, prints an error and returns -1.
+    // Skips comments and gets type
+    char* tok_type = peek();
+    if (strcmp(tok_type, kind) == 0) {
+        // Consume and return index
+        return next();
+    }
+    // Handle error
+
+    int tok_line = token_lines[parser_pos];
+    printf("%s\n", "Error: Syntax Error on line");
+    printf("%s\n", itos(tok_line));
+    printf("%s\n", "Expected token:");
+    printf("%s\n", kind);
+    printf("%s\n", "... but got token:");
+    printf("%s\n", tok_type);
+    // In a real compiler, we'd exit here.
+    return -1;
+    // Indicate error
 }
 
 // =============================================================
@@ -60,7 +120,7 @@ int main() {
 //
 // This is the main lexer logic, ported from python/lexer/lexer.py
 // =============================================================
-int tokenize(char* source_code, char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], char token_pool[50000]) {
+int tokenize(char* source_code) {
     int pos = 0;
     int line_num = 1;
     int line_start = 0;
@@ -146,95 +206,95 @@ int tokenize(char* source_code, char* token_types[1000], int token_values[1000],
              }
              // --- 4. Check for Single-Char Tokens ---
              else if (c == '(') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LPAREN", line_num, col);
+                 add_simple_token(token_count, "LPAREN", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ')') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "RPAREN", line_num, col);
+                 add_simple_token(token_count, "RPAREN", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '{') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LBRACE", line_num, col);
+                 add_simple_token(token_count, "LBRACE", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '}') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "RBRACE", line_num, col);
+                 add_simple_token(token_count, "RBRACE", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '[') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LSQUARE", line_num, col);
+                 add_simple_token(token_count, "LSQUARE", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ']') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "RSQUARE", line_num, col);
+                 add_simple_token(token_count, "RSQUARE", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '+') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "PLUS", line_num, col);
+                 add_simple_token(token_count, "PLUS", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '-') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "MINUS", line_num, col);
+                 add_simple_token(token_count, "MINUS", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '*') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "MUL", line_num, col);
+                 add_simple_token(token_count, "MUL", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == '/') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "DIV", line_num, col);
+                 add_simple_token(token_count, "DIV", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ';') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "SEMICOL", line_num, col);
+                 add_simple_token(token_count, "SEMICOL", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              } else if (c == ',') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "COMMA", line_num, col);
+                 add_simple_token(token_count, "COMMA", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 1;
              }
              // --- 5. Check for Multi-Char Tokens ---
              else if (c == '=') {
                  if (source_code[pos + 1] == '=') {
-                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "EQ", line_num, col);
+                add_simple_token(token_count, "EQ", line_num, col);
                 token_count = token_count + 1;
                 pos = pos + 2;
             } else {
-                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "ASSIGN", line_num, col);
+                add_simple_token(token_count, "ASSIGN", line_num, col);
                 token_count = token_count + 1;
                 pos = pos + 1;
             }
              } else if (c == '!' && source_code[pos + 1] == '=') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "NE", line_num, col);
+                 add_simple_token(token_count, "NE", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 2;
              } else if (c == '>') {
                  if (source_code[pos + 1] == '=') {
-                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "GE", line_num, col);
+                add_simple_token(token_count, "GE", line_num, col);
                 token_count = token_count + 1;
                 pos = pos + 2;
             } else {
-                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "GT", line_num, col);
+                add_simple_token(token_count, "GT", line_num, col);
                 token_count = token_count + 1;
                 pos = pos + 1;
             }
              } else if (c == '<') {
                  if (source_code[pos + 1] == '=') {
-                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LE", line_num, col);
+                add_simple_token(token_count, "LE", line_num, col);
                 token_count = token_count + 1;
                 pos = pos + 2;
             } else {
-                add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "LT", line_num, col);
+                add_simple_token(token_count, "LT", line_num, col);
                 token_count = token_count + 1;
                 pos = pos + 1;
             }
              } else if (c == '&' && source_code[pos + 1] == '&') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "AND", line_num, col);
+                 add_simple_token(token_count, "AND", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 2;
              } else if (c == '|' && source_code[pos + 1] == '|') {
-                 add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "OR", line_num, col);
+                 add_simple_token(token_count, "OR", line_num, col);
                  token_count = token_count + 1;
                  pos = pos + 2;
              }
@@ -331,7 +391,7 @@ int tokenize(char* source_code, char* token_types[1000], int token_values[1000],
              }
     }
     // Add EOF Token
-    add_simple_token(token_types, token_values, token_lines, token_cols, token_count, "EOF", line_num, col);
+    add_simple_token(token_count, "EOF", line_num, col);
     token_count = token_count + 1;
     return token_count;
 }
@@ -390,7 +450,7 @@ char* check_keywords(char* s) {
 }
 
 // Helper to add a simple token (without a value) to the token arrays.
-int add_simple_token(char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], int index, char* type, int line, int col) {
+int add_simple_token(int index, char* type, int line, int col) {
     token_types[index] = type;
     token_values[index] = -1;
     // -1 means no value

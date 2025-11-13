@@ -4,6 +4,7 @@
 char* concat(char* str1, char* str2);
 char* itos(int x);
 char* ctos(char c);
+int x = 0;
 
 // Comment
 void test() {
