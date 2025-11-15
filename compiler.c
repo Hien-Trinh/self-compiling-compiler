@@ -28,45 +28,160 @@ int parser_pos = 0;
 // =============================================================
 // Function Declarations
 // =============================================================
+// --- Lexer Helpers ---
 int is_letter(char c);
 int is_digit(char c);
 int is_space(char c);
 int is_ident_char(char c);
 char* check_keywords(char* s);
 int add_simple_token(int index, char* type, int line, int col);
+int tokenize(char* source_code);
+// --- Parser Helpers ---
 char* peek();
 int next();
 int expect(char* kind);
-int tokenize(char* source_code);
-int parse(char* c_code, char* token_types[1000], int token_values[1000], int token_lines[1000], int token_cols[1000], char token_pool[50000]);
+char* parse();
+char* global_decl();
+char* fn_decl();
+char* let_stmt();
+char* comment_stmt();
+void print_token() {
+    char* buffer = "";
+    int i = 0;
+    int j = 0;
+    int pool_pos = 0;
+    while (j < n_tokens) {
+        pool_pos = token_values[j];
+        i = i + strlen(token_types[j]) + 1;
+        buffer = concat(concat(buffer, token_types[j]), " ");
+        if (pool_pos != -1) {
+            while (token_pool[pool_pos] != '\0') {
+                buffer[i] = token_pool[pool_pos];
+                pool_pos = pool_pos + 1;
+                i = i + 1;
+            }
+            buffer[i] = ' ';
+            i = i + 1;
+        }
+        j = j + 1;
+    }
+    buffer[i] = '\0';
+    printf("%s\n", buffer);
+}
+
 // =============================================================
 // Main Entry Point
 // =============================================================
 int main() {
-    // Test code with a comment
-    char* code = "ah main() { // test comment\n beg x = 5; }";
+    // Test code with all global declaration types
+    char* code = "// My Stage 1 Compiler\n\nbeg int global_var = 10;\n\nah int my_func();\n\nah int main() {\n    boo(global_var);\n}\n";
     // 1. Tokenize
-    // Tokenize populates the global arrays and returns the count
+    printf("%s\n", "--- Tokenizing ---");
     n_tokens = tokenize(code);
-    // 2. Parse (Test)
-    printf("%s\n", "--- Starting Parse ---");
-    // Test the new parser helpers
+    printf("%s\n", "--- Tokenizing Complete ---");
+    print_token();
+    // 2. Parse
+    printf("%s\n", "--- Parsing ---");
+    char* c_code = parse();
+    printf("%s\n", "--- Generated C Code ---");
+    printf("%s\n", c_code);
+    return 0;
+}
+
+// =============================================================
+// Parser
+// =============================================================
+char* parse() {
+    // Main parser entry point.
+    // Loops until EOF, parsing all global declarations.
+    char* code_buffer = "";
+    // This will hold the entire generated C file
+    while (strcmp(peek(), "EOF") != 0) {
+        code_buffer = concat(code_buffer, global_decl());
+    }
+    return code_buffer;
+}
+
+char* global_decl() {
+    // Dispatches to the correct parser function
+    // based on the next token.
+    char* t = peek();
+    if (strcmp(t, "FN") == 0) {
+        return fn_decl();
+    } else if (strcmp(t, "LET") == 0) {
+               return let_stmt();
+           } else if (strcmp(t, "COMMENT") == 0) {
+               return comment_stmt();
+           } else {
+               // Error handling
+               int tok_line = token_lines[parser_pos];
+               printf("%s\n", concat("Error: Unexpected global token on line ", itos(tok_line)));
+               printf("%s\n", concat("Expected FN, LET, or COMMENT, but got: ", t));
+               // Consume the bad token to prevent infinite loop
+               next();
+               return "";
+               // Return empty string for this declaration
+           }
+}
+
+char* fn_decl() {
+    printf("%s\n", "Parsing function (stub)...");
+    // Consume the function prototype/definition
+    // ah int my_func(int a) { ... }
     expect("FN");
+    if (strcmp(peek(), "TYPE") == 0) {
+        next();
+    }
     expect("ID");
     expect("LPAREN");
+    while (strcmp(peek(), "RPAREN") != 0) {
+        next();
+        // Consume params
+    }
     expect("RPAREN");
-    expect("LBRACE");
-    // The peek() inside expect() will automatically skip the comment!
+    if (strcmp(peek(), "LBRACE") == 0) {
+        // Function Definition
+        expect("LBRACE");
+        while ((strcmp(peek(), "RBRACE") != 0)) {
+            next();
+            // Consume body
+        }
+        expect("RBRACE");
+    } else {
+        // Function Declaration (Prototype)
+        expect("SEMICOL");
+    }
+    return "/* C code for function (stub) */\n";
+}
+
+char* let_stmt() {
+    printf("%s\n", "Parsing global variable (stub)...");
+    // Consume the global variable
+    // beg int x = 10;
     expect("LET");
+    if (strcmp(peek(), "TYPE") == 0) {
+        next();
+    }
     expect("ID");
-    expect("ASSIGN");
-    expect("NUMBER");
+    if (strcmp(peek(), "LSQUARE") == 0) {
+        expect("LSQUARE");
+        if (strcmp(peek(), "NUMBER") == 0) {
+            next();
+        }
+        expect("RSQUARE");
+    }
+    if (strcmp(peek(), "ASSIGN") == 0) {
+        expect("ASSIGN");
+        // Just consume one token for the value (e.g., NUMBER)
+        next();
+    }
     expect("SEMICOL");
-    expect("RBRACE");
-    expect("EOF");
-    printf("%s\n", "--- Parse Complete ---");
-    printf("%s\n", "SUCCESS: Parser helpers work.");
-    return 0;
+    return "/* C code for global variable (stub) */\n";
+}
+
+char* comment_stmt() {
+    next();
+    return "";
 }
 
 // =============================================================
@@ -104,12 +219,9 @@ int expect(char* kind) {
     // Handle error
 
     int tok_line = token_lines[parser_pos];
-    printf("%s\n", "Error: Syntax Error on line");
-    printf("%s\n", itos(tok_line));
-    printf("%s\n", "Expected token:");
-    printf("%s\n", kind);
-    printf("%s\n", "... but got token:");
-    printf("%s\n", tok_type);
+    printf("%s\n", concat("Error: Syntax Error on line ", itos(tok_line)));
+    printf("%s\n", concat("Expected token: ", kind));
+    printf("%s\n", concat("... but got token: ", tok_type));
     // In a real compiler, we'd exit here.
     return -1;
     // Indicate error
@@ -191,16 +303,21 @@ int tokenize(char* source_code) {
                 c = source_code[pos];
             }
                  buffer[i] = '\0';
-                 token_types[token_count] = check_keywords(buffer);
+                 char* tok_type = check_keywords(buffer);
+                 token_types[token_count] = tok_type;
                  token_lines[token_count] = line_num;
                  token_cols[token_count] = token_start_col;
                  // Copy buffer to string pool
-                 token_values[token_count] = pool_pos;
-                 j = 0;
-                 while (j <= i) {
-                token_pool[pool_pos] = buffer[j];
-                pool_pos = pool_pos + 1;
-                j = j + 1;
+                 if (strcmp(tok_type, "ID") != 0 && strcmp(tok_type, "TYPE") != 0) {
+                token_values[token_count] = -1;
+            } else {
+                token_values[token_count] = pool_pos;
+                j = 0;
+                while (j <= i) {
+                    token_pool[pool_pos] = buffer[j];
+                    pool_pos = pool_pos + 1;
+                    j = j + 1;
+                }
             }
                  token_count = token_count + 1;
              }
@@ -442,19 +559,21 @@ char* check_keywords(char* s) {
     if (strcmp(s, "ah") == 0) {
         return "FN";
     } else if (strcmp(s, "beg") == 0) {
-             return "LET";
-         } else if (strcmp(s, "boo") == 0) {
-             return "PRINT";
-         } else if (strcmp(s, "if") == 0) {
-             return "IF";
-         } else if (strcmp(s, "else") == 0) {
-             return "ELSE";
-         } else if (strcmp(s, "while") == 0) {
-             return "WHILE";
-         } else if (strcmp(s, "return") == 0) {
-             return "RETURN";
-         }
-         // Default case: not a keyword
+               return "LET";
+           } else if (strcmp(s, "boo") == 0) {
+               return "PRINT";
+           } else if (strcmp(s, "if") == 0) {
+               return "IF";
+           } else if (strcmp(s, "else") == 0) {
+               return "ELSE";
+           } else if (strcmp(s, "while") == 0) {
+               return "WHILE";
+           } else if (strcmp(s, "return") == 0) {
+               return "RETURN";
+           } else if (strcmp(s, "int*") == 0 || strcmp(s, "char*") == 0 || strcmp(s, "int") == 0 || strcmp(s, "char") == 0 || strcmp(s, "void") == 0) {
+               return "TYPE";
+           }
+           // Default case: not a keyword
 
     return "ID";
 }

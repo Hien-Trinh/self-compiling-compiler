@@ -19,7 +19,8 @@ class Parser:
         self.env = {
             "concat": "char*",
             "ctos": "char*",
-            "itos": "char*"
+            "itos": "char*",
+            "strlen": "int"
         }
 
     # Returns kind of the next token
