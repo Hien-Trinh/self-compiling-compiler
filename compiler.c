@@ -25,6 +25,8 @@ int n_tokens = 0;
 // --- Parser State ---
 int parser_pos = 0;
 // Current token index for the parser
+char* expr_type;
+// Type of the last parsed expression, works like a forgetful stack
 // =============================================================
 // Function Declarations
 // =============================================================
@@ -40,14 +42,24 @@ int tokenize(char* source_code);
 char* parse();
 char* global_decl();
 char* fn_decl();
+char* statement();
 char* let_stmt(int is_global);
 char* comment_stmt();
+char* expr();
+char* logical();
+char* relational();
+char* additive();
+char* multiplicative();
+char* unary();
+char* atom();
 char* peek();
 int next();
 int expect(char* kind);
 int clear_local_symbols();
 char* get_symbol_type(int is_global, char* name);
 int add_symbol(int is_global, char* name, char* type);
+int str_ends_with(char* s, char c);
+char* op_to_c_op(char* tok_type);
 // --- Symbol Table Storage ---
 // We store 'char*' pointers for names and types.
 // The Stage 0 compiler will get the name strings from the token_pool.
@@ -61,27 +73,18 @@ char* local_names[100];
 char* local_types[100];
 int n_locals = 0;
 void print_token() {
-    char* buffer = "";
+    printf("%s\n", "--- Stored Tokens ---");
     int i = 0;
-    int j = 0;
     int pool_pos = 0;
-    while (j < n_tokens) {
-        pool_pos = token_values[j];
-        i = i + strlen(token_types[j]) + 1;
-        buffer = concat(concat(buffer, token_types[j]), " ");
-        if (pool_pos != -1) {
-            while (token_pool[pool_pos] != '\0') {
-                buffer[i] = token_pool[pool_pos];
-                pool_pos = pool_pos + 1;
-                i = i + 1;
-            }
-            buffer[i] = ' ';
-            i = i + 1;
+    while ((i < n_tokens)) {
+        printf("%s\n", token_types[i]);
+        pool_pos = token_values[i];
+        if ((pool_pos != -1)) {
+            // It has a value. Print it using pointer arithmetic.
+            printf("%s\n", token_pool + pool_pos);
         }
-        j = j + 1;
+        i = i + 1;
     }
-    buffer[i] = '\0';
-    printf("%s\n", buffer);
 }
 
 // =============================================================
@@ -149,12 +152,12 @@ char* fn_decl() {
     int fn_type_idx = -1;
     if (strcmp(peek(), "TYPE") == 0) {
         fn_type_idx = next();
-        fn_type = (token_pool + token_values[fn_type_idx]);
+        fn_type = token_pool + token_values[fn_type_idx];
     }
     // --- Get Name ---
 
     int fn_name_idx = expect("ID");
-    char* fn_name = (token_pool + token_values[fn_name_idx]);
+    char* fn_name = token_pool + token_values[fn_name_idx];
     // --- Add to global ---
     add_symbol(1, fn_name, fn_type);
     expect("LPAREN");
@@ -194,12 +197,12 @@ char* let_stmt(int is_global) {
     int var_type_idx = -1;
     if (strcmp(peek(), "TYPE") == 0) {
         var_type_idx = next();
-        var_type = (token_pool + token_values[var_type_idx]);
+        var_type = token_pool + token_values[var_type_idx];
     }
     // --- Get Name ---
 
     int var_name_idx = expect("ID");
-    char* var_name = (token_pool + token_values[var_name_idx]);
+    char* var_name = token_pool + token_values[var_name_idx];
     // Check redefinition
     if ((is_global == 0 && strcmp(get_symbol_type(0, var_name), "") != 0) || (is_global == 1 && strcmp(get_symbol_type(1, var_name), "") != 0)) {
         printf("%s\n", "Error: Redefinition of variable");
@@ -216,13 +219,13 @@ char* let_stmt(int is_global) {
         // TODO: Replace this with call to expr()
         int val_tok = next();
         // Stub: consume value
-        char* rhs_expr = (token_pool + token_values[val_tok]);
+        char* right_expr = token_pool + token_values[val_tok];
         // END TODO
         // TODO: Add type checking logic from Python
         expect("SEMICOL");
         add_symbol(is_global, var_name, var_type);
         // C code: e.g., "int x = 5;"
-        return concat(concat(concat(concat(concat(var_type, " "), var_name), " = "), rhs_expr), ";\n");
+        return concat(concat(concat(concat(concat(var_type, " "), var_name), " = "), right_expr), ";\n");
     } else if (strcmp(peek(), "LSQUARE") == 0) {
              // --- Case 2: Array Declaration (e.g., beg int arr[10]) ---
              next();
@@ -231,7 +234,7 @@ char* let_stmt(int is_global) {
             return "";
         }
              int size_tok = expect("NUMBER");
-             char* size = (token_pool + token_values[size_tok]);
+             char* size = token_pool + token_values[size_tok];
              expect("RSQUARE");
              expect("SEMICOL");
              // Store array type as 'base_type*' (e.g., 'int*')
@@ -263,22 +266,131 @@ char* comment_stmt() {
 }
 
 // =============================================================
+// Expression Parsers
+// =============================================================
+char* expr() {
+    // Main entry point for parsing an expression.
+    // Returns C code string. Sets global 'expr_type'.
+    return logical();
+}
+
+char* logical() {
+    // Handles: expr (&& | ||) expr
+    char* code = relational();
+    char* left_type = expr_type;
+    while (strcmp(peek(), "OR") == 0 || strcmp(peek(), "AND") == 0) {
+        int op_idx = next();
+        char* op = op_to_c_op(token_types[op_idx]);
+        char* right_code = relational();
+        char* right_type = expr_type;
+        // Type check: logical ops must be on ints (or chars)
+        if (strcmp(left_type, "int") != 0 || strcmp(right_type, "int") != 0) {
+            printf("%s\n", concat("Error: Logical operators '&&' and '||' can only be used on integers, line ", itos(token_lines[op_idx])));
+            return "";
+        }
+        code = concat(concat(concat(concat(code, " "), op), " "), right_code);
+        expr_type = "int";
+        // Result is always an int
+        left_type = "int";
+    }
+    expr_type = left_type;
+    // Set final type
+    return code;
+}
+
+char* relational() {
+    // Handles: expr (== | != | < | > | <= | >=) expr
+    char* code = additive();
+    char* left_type = expr_type;
+    while (strcmp(peek(), "EQ") == 0 || strcmp(peek(), "NE") == 0 || strcmp(peek(), "LT") == 0 || strcmp(peek(), "GT") == 0 || strcmp(peek(), "LE") == 0 || strcmp(peek(), "GE") == 0) {
+        int op_idx = next();
+        char* op = op_to_c_op(token_types[op_idx]);
+        int line = token_lines[op_idx];
+        char* right_code = additive();
+        char* right_type = expr_type;
+        // Type check
+        if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0) {
+            if (strcmp(op, "==") == 0) {
+                code = concat(concat(concat(concat("strcmp(", code), ", "), right_code), ") == 0");
+            } else if (strcmp(op, "!=") == 0) {
+                       code = concat(concat(concat(concat("strcmp(", code), ", "), right_code), ") != 0");
+                   } else {
+                       printf("%s\n", concat(concat(concat("Error: Operator '", op), "' not allowed on strings, line "), itos(line)));
+                       return "";
+                   }
+        } else if (strcmp(left_type, "char*") == 0 || strcmp(right_type, "char*") == 0) {
+                   printf("%s\n", concat(concat(concat("Error: Operator '", op), "' not allowed between string and non-string, line "), itos(line)));
+                   return "";
+               } else {
+                   // int/char comparison
+                   code = concat(concat(concat(concat(concat(concat("(", code), " "), op), " "), right_code), ")");
+               }
+        expr_type = "int";
+        // Result is always an int
+        left_type = "int";
+    }
+    expr_type = left_type;
+    // Set final type
+    return code;
+}
+
+char* additive() {
+    // Handles: expr (+ | -) expr
+    // This also handles pointer arithmetic.
+    char* code = multiplicative();
+    char* left_type = expr_type;
+    while (strcmp(peek(), "PLUS") == 0 || strcmp(peek(), "MINUS") == 0) {
+        int op_idx = next();
+        char* op = op_to_c_op(token_types[op_idx]);
+        int line = token_lines[op_idx];
+        char* right_code = multiplicative();
+        char* right_type = expr_type;
+        // Case 1: int + int
+        if (strcmp(left_type, "int") == 0 && strcmp(right_type, "int") == 0) {
+            expr_type = "int";
+            code = concat(concat(concat(concat(code, " "), op), " "), right_code);
+        }
+        // Case 2: Pointer Arithmetic
+        else if (str_ends_with(left_type, '*') && strcmp(right_type, "int") == 0) {
+                 expr_type = left_type;
+                 // e.g., int* + int = int*
+                 code = concat(concat(concat(concat(code, " "), op), " "), right_code);
+             } else if (strcmp(left_type, "int") == 0 && str_ends_with(right_type, '*')) {
+                 if ((strcmp(op, "+") == 0)) {
+                expr_type = right_type;
+                // int + int* = int*
+                code = concat(concat(concat(concat(code, " "), op), " "), right_code);
+            } else {
+                printf("%s\n", concat("Error: Cannot subtract a pointer from an integer, line ", itos(line)));
+                return "";
+            }
+             }
+             // Case 3: String Concat (char* + char*)
+             else if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0 && strcmp(op, "+") == 0) {
+                 expr_type = "char*";
+                 code = concat(concat(concat(concat("concat(", code), ", "), right_code), ")");
+             }
+             // Case 4: Error
+             else {
+                 printf("%s\n", concat(concat(concat(concat(concat(concat(concat("Error: Operator '", op), "' not allowed between '"), left_type), "' and '"), right_type), "', line "), itos(line)));
+                 return "";
+             }
+        left_type = expr_type;
+    }
+    expr_type = left_type;
+    return code;
+}
+
+// =============================================================
 // Parser Helpers
 // =============================================================
 char* peek() {
     // Returns the type of the current token.
-    // Automatically skips over any 'COMMENT' tokens.
-    while (strcmp(token_types[parser_pos], "COMMENT") == 0) {
-        parser_pos = parser_pos + 1;
-    }
     return token_types[parser_pos];
 }
 
 int next() {
     // Consumes the current token and returns its index.
-    // Make sure to call peek() first to skip comments.
-    // Skips any comments
-    peek();
     int current_pos = parser_pos;
     parser_pos = parser_pos + 1;
     return current_pos;
@@ -358,6 +470,66 @@ int add_symbol(int is_global, char* name, char* type) {
         n_globals = n_globals + 1;
     }
     return 0;
+}
+
+// =============================================================
+// Parser Utils
+// =============================================================
+int str_ends_with(char* s, char c) {
+    // Checks if string 's' ends with character 'c'.
+    // Returns 1 (true) or 0 (false).
+    int len = strlen(s);
+    if (len == 0) {
+        return 0;
+        // Empty string
+    }
+    if (s[len - 1] == c) {
+        return 1;
+    }
+    return 0;
+}
+
+char* op_to_c_op(char* tok_type) {
+    // Translates a token type (e.g., "PLUS") to its C operator (e.g., "+").
+    if (strcmp(tok_type, "PLUS") == 0) {
+        return "+";
+    }
+    if (strcmp(tok_type, "MINUS") == 0) {
+        return "-";
+    }
+    if (strcmp(tok_type, "MUL") == 0) {
+        return "*";
+    }
+    if (strcmp(tok_type, "DIV") == 0) {
+        return "/";
+    }
+    if (strcmp(tok_type, "EQ") == 0) {
+        return "==";
+    }
+    if (strcmp(tok_type, "NE") == 0) {
+        return "!=";
+    }
+    if (strcmp(tok_type, "LT") == 0) {
+        return "<";
+    }
+    if (strcmp(tok_type, "GT") == 0) {
+        return ">";
+    }
+    if (strcmp(tok_type, "LE") == 0) {
+        return "<=";
+    }
+    if (strcmp(tok_type, "GE") == 0) {
+        return ">=";
+    }
+    if (strcmp(tok_type, "AND") == 0) {
+        return "&&";
+    }
+    if (strcmp(tok_type, "OR") == 0) {
+        return "||";
+    }
+    // Should never happen, but good to have a default.
+
+    return "";
 }
 
 // =============================================================

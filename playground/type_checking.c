@@ -8,17 +8,12 @@ int x = 0;
 
 // Comment
 void test() {
-  int x = 10;
-  if ((x > 0)) {
-    x = 1;
-  } else if ((x == 0)) {
-    x = 0;
-  }
+  int x = "this" || "that";
+  printf("\d", x);
 }
 
 int main() {
   // Comment
-  char c = 't';
   char c;
   return 0;
 }

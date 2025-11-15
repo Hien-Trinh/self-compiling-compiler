@@ -20,7 +20,8 @@ class Parser:
             "concat": "char*",
             "ctos": "char*",
             "itos": "char*",
-            "strlen": "int"
+            "strlen": "int",
+            "strcmp": "int"
         }
 
     # Returns kind of the next token
@@ -485,13 +486,13 @@ class Parser:
 
                 if op == '+':
                     res_type = res_type if res_type[-1] == '*' else rhs_type
-                    result = f'({result} {op} {rhs})'
+                    result = f'{result} {op} {rhs}'
                 else:
                     if res_type == 'int':
                         raise TypeError(
                             f'Cannot subtract a pointer from an integer, line {line_num}')
                     # 'ptr - int' is allowed
-                    res_type, result = res_type, f'({result} {op} {rhs})'
+                    res_type, result = res_type, f'{result} {op} {rhs}'
 
             elif res_type == 'char*' and rhs_type == 'char*' and op == "+":
                 res_type, result = res_type, f'concat({result}, {rhs})'
