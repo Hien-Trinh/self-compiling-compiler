@@ -37,14 +37,29 @@ char* check_keywords(char* s);
 int add_simple_token(int index, char* type, int line, int col);
 int tokenize(char* source_code);
 // --- Parser Helpers ---
-char* peek();
-int next();
-int expect(char* kind);
 char* parse();
 char* global_decl();
 char* fn_decl();
-char* let_stmt();
+char* let_stmt(int is_global);
 char* comment_stmt();
+char* peek();
+int next();
+int expect(char* kind);
+int clear_local_symbols();
+char* get_symbol_type(int is_global, char* name);
+int add_symbol(int is_global, char* name, char* type);
+// --- Symbol Table Storage ---
+// We store 'char*' pointers for names and types.
+// The Stage 0 compiler will get the name strings from the token_pool.
+// The type strings will be string literals (e.g., "int", "char*").
+// Global Scope (self.env)
+char* global_names[100];
+char* global_types[100];
+int n_globals = 0;
+// Local Scope (self.variables)
+char* local_names[100];
+char* local_types[100];
+int n_locals = 0;
 void print_token() {
     char* buffer = "";
     int i = 0;
@@ -105,18 +120,18 @@ char* parse() {
 char* global_decl() {
     // Dispatches to the correct parser function
     // based on the next token.
-    char* t = peek();
-    if (strcmp(t, "FN") == 0) {
+    char* tok = peek();
+    if (strcmp(tok, "FN") == 0) {
         return fn_decl();
-    } else if (strcmp(t, "LET") == 0) {
-               return let_stmt();
-           } else if (strcmp(t, "COMMENT") == 0) {
+    } else if (strcmp(tok, "LET") == 0) {
+               return let_stmt(1);
+           } else if (strcmp(tok, "COMMENT") == 0) {
                return comment_stmt();
            } else {
                // Error handling
                int tok_line = token_lines[parser_pos];
                printf("%s\n", concat("Error: Unexpected global token on line ", itos(tok_line)));
-               printf("%s\n", concat("Expected FN, LET, or COMMENT, but got: ", t));
+               printf("%s\n", concat("Expected FN, LET, or COMMENT, but got: ", tok));
                // Consume the bad token to prevent infinite loop
                next();
                return "";
@@ -125,58 +140,121 @@ char* global_decl() {
 }
 
 char* fn_decl() {
-    printf("%s\n", "Parsing function (stub)...");
     // Consume the function prototype/definition
     // ah int my_func(int a) { ... }
     expect("FN");
+    // --- Get Type ---
+    char* fn_type = "int";
+    // Default type
+    int fn_type_idx = -1;
     if (strcmp(peek(), "TYPE") == 0) {
-        next();
+        fn_type_idx = next();
+        fn_type = (token_pool + token_values[fn_type_idx]);
     }
-    expect("ID");
+    // --- Get Name ---
+
+    int fn_name_idx = expect("ID");
+    char* fn_name = (token_pool + token_values[fn_name_idx]);
+    // --- Add to global ---
+    add_symbol(1, fn_name, fn_type);
     expect("LPAREN");
     while (strcmp(peek(), "RPAREN") != 0) {
         next();
         // Consume params
     }
     expect("RPAREN");
+    // --- Inside the LBRACE branch ---
     if (strcmp(peek(), "LBRACE") == 0) {
         // Function Definition
-        expect("LBRACE");
-        while ((strcmp(peek(), "RBRACE") != 0)) {
+        next();
+        // --- Setup local scope ---
+        clear_local_symbols();
+        // TODO: Loop through params and add_symbol("local", ...)
+        // ---
+        char* body = "";
+        while (strcmp(peek(), "RBRACE") != 0) {
+            // TODO: This needs to call statement(), not next()
             next();
-            // Consume body
+            // Stub
         }
         expect("RBRACE");
+        return "/* C code for function (stub) */\n";
     } else {
-        // Function Declaration (Prototype)
-        expect("SEMICOL");
+        // ... (prototype logic) ...
     }
     return "/* C code for function (stub) */\n";
 }
 
-char* let_stmt() {
-    printf("%s\n", "Parsing global variable (stub)...");
-    // Consume the global variable
-    // beg int x = 10;
+char* let_stmt(int is_global) {
+    int line_num = token_lines[parser_pos];
     expect("LET");
+    // --- Get Type ---
+    char* var_type = "int";
+    // Default type
+    int var_type_idx = -1;
     if (strcmp(peek(), "TYPE") == 0) {
-        next();
+        var_type_idx = next();
+        var_type = (token_pool + token_values[var_type_idx]);
     }
-    expect("ID");
-    if (strcmp(peek(), "LSQUARE") == 0) {
-        expect("LSQUARE");
-        if (strcmp(peek(), "NUMBER") == 0) {
-            next();
-        }
-        expect("RSQUARE");
+    // --- Get Name ---
+
+    int var_name_idx = expect("ID");
+    char* var_name = (token_pool + token_values[var_name_idx]);
+    // Check redefinition
+    if ((is_global == 0 && strcmp(get_symbol_type(0, var_name), "") != 0) || (is_global == 1 && strcmp(get_symbol_type(1, var_name), "") != 0)) {
+        printf("%s\n", "Error: Redefinition of variable");
+        printf("%s\n", var_name);
+        return "";
+        // Error
     }
+    // --- Parsing Cases ---
+
     if (strcmp(peek(), "ASSIGN") == 0) {
-        expect("ASSIGN");
-        // Just consume one token for the value (e.g., NUMBER)
+        // --- Case 1: Declaration with Assignment (e.g., beg x = 10) ---
         next();
-    }
-    expect("SEMICOL");
-    return "/* C code for global variable (stub) */\n";
+        // We will need expr() later. For now, just consume one token.
+        // TODO: Replace this with call to expr()
+        int val_tok = next();
+        // Stub: consume value
+        char* rhs_expr = (token_pool + token_values[val_tok]);
+        // END TODO
+        // TODO: Add type checking logic from Python
+        expect("SEMICOL");
+        add_symbol(is_global, var_name, var_type);
+        // C code: e.g., "int x = 5;"
+        return concat(concat(concat(concat(concat(var_type, " "), var_name), " = "), rhs_expr), ";\n");
+    } else if (strcmp(peek(), "LSQUARE") == 0) {
+             // --- Case 2: Array Declaration (e.g., beg int arr[10]) ---
+             next();
+             if (strcmp(var_type, "int") == 0) {
+            printf("%s\n", concat("Error: Array declaration must have an explicit type on line", itos(line_num)));
+            return "";
+        }
+             int size_tok = expect("NUMBER");
+             char* size = (token_pool + token_values[size_tok]);
+             expect("RSQUARE");
+             expect("SEMICOL");
+             // Store array type as 'base_type*' (e.g., 'int*')
+             char* array_type = concat(var_type, "*");
+             add_symbol(is_global, var_name, array_type);
+             // C code: e.g., "int arr[10];"
+             return concat(concat(concat(concat(concat(var_type, " "), var_name), "["), size), "];\n");
+         } else if (strcmp(peek(), "SEMICOL") == 0) {
+             // --- Case 3: Declaration without Assignment (e.g., beg int x;) ---
+             next();
+             if (strcmp(var_type, "int") == 0) {
+            printf("%s\n", concat("Error: Declaration without assignment must have explicit type on line", itos(line_num)));
+            return "";
+        }
+             add_symbol(is_global, var_name, var_type);
+             // C code: e.g., "int x;"
+             return concat(concat(concat(var_type, " "), var_name), ";\n");
+         } else {
+             printf("%s\n", concat("Error: Expected '=', '[', or ';' after variable name on line", itos(line_num)));
+             next();
+             // Consume bad token
+             return "";
+         }
 }
 
 char* comment_stmt() {
@@ -225,6 +303,61 @@ int expect(char* kind) {
     // In a real compiler, we'd exit here.
     return -1;
     // Indicate error
+}
+
+// =============================================================
+// Symbol Table Helpers
+// =============================================================
+int clear_local_symbols() {
+    // Clears the local (function-level) symbol table.
+    // Called when entering a new function.
+    n_locals = 0;
+    return 0;
+}
+
+char* get_symbol_type(int is_global, char* name) {
+    // Searches for a variable 'name' in the given 'scope'.
+    // Returns its type (e.g., "int", "char*") if found.
+    // Returns "" (empty string) if not found.
+    int i = 0;
+    if (is_global == 0) {
+        while (i < n_locals) {
+            if (strcmp(local_names[i], name) == 0) {
+                return local_types[i];
+            }
+            i = i + 1;
+        }
+    } else {
+        // "global"
+        while (i < n_globals) {
+            if (strcmp(global_names[i], name) == 0) {
+                return global_types[i];
+            }
+            i = i + 1;
+        }
+    }
+    // Not found, check outer scope (if local)
+    if (is_global == 0) {
+        return get_symbol_type(1, name);
+    }
+    return "";
+    // Not found anywhere
+}
+
+int add_symbol(int is_global, char* name, char* type) {
+    // Adds a new variable to the symbol table.
+    // Returns 0 on success.
+    // NOTE: This function assumes you have already checked for redefinition.
+    if (is_global == 0) {
+        local_names[n_locals] = name;
+        local_types[n_locals] = type;
+        n_locals = n_locals + 1;
+    } else {
+        global_names[n_globals] = name;
+        global_types[n_globals] = type;
+        n_globals = n_globals + 1;
+    }
+    return 0;
 }
 
 // =============================================================
