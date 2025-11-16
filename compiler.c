@@ -369,6 +369,154 @@ char* print_stmt() {
            }
 }
 
+char* id_stmt() {
+    // Handles statements beginning with an identifier:
+    // 1. x = 10;        (Assignment)
+    // 2. my_func(10);   (Function Call)
+    // 3. arr[0] = 5;    (Array Assignment)
+    int tok_idx = next();
+    int line_num = token_lines[tok_idx];
+    char* var_name = token_pool + token_values[tok_idx];
+    // Get variable from local/global scope
+    char* var_type = get_symbol_type(0, var_name);
+    // Declare right expression
+    char* right_expr;
+    char* right_type;
+    if ((strcmp(var_type, "") == 0)) {
+        printf("%s\n", concat(concat(concat("Error: Undeclared identifier '", var_name), "' on line "), itos(line_num)));
+        return "";
+    }
+    // --- Case 1: Variable Assignment ---
+
+    if (strcmp(peek(), "ASSIGN") == 0) {
+        next();
+        // Get right expression
+        right_expr = expr();
+        right_type = expr_type;
+        // Type check
+        if (strcmp(var_type, right_type) != 0) {
+            printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible ", right_type), " to "), var_type), " conversion on line "), itos(line_num)));
+            return "";
+        }
+        expect("SEMICOL");
+        return concat(concat(concat(var_name, " = "), right_expr), ";\n");
+    }
+    // --- Case 2: Function Call ---
+    else if (strcmp(peek(), "LPAREN") == 0) {
+             next();
+             // TODO: Check if var_type is a function type
+             // For now, we assume if it's not an assignment, it's a function call.
+             char* args_code = "";
+             int arg_count = 0;
+             while (strcmp(peek(), "RPAREN") != 0) {
+            if ((arg_count > 0)) {
+                expect("COMMA");
+                args_code = concat(args_code, ", ");
+            }
+            args_code = concat(args_code, expr());
+            arg_count = arg_count + 1;
+        }
+             expect("RPAREN");
+             expect("SEMICOL");
+             return concat(concat(concat(var_name, "("), args_code), ");\n");
+         }
+         // --- Case 3: Array Assignment ---
+         else if (strcmp(peek(), "LSQUARE") == 0) {
+             next();
+             // Check if var_type is a pointer
+             if ((str_ends_with(var_type, '*') == 0)) {
+            printf("%s\n", concat(concat(concat("Error: Variable '", var_name), "' is not an array and cannot be indexed, line "), itos(line_num)));
+            return "";
+        }
+        // Get index expression
+
+             char* index_expr = expr();
+             if ((strcmp(expr_type, "int") != 0)) {
+            printf("%s\n", concat(concat(concat("Error: Array index must be an integer, got ", expr_type), ", line "), itos(line_num)));
+            return "";
+        }
+             expect("RSQUARE");
+             expect("ASSIGN");
+             // Get right expression
+             right_expr = expr();
+             right_type = expr_type;
+             // Type check
+             char* base_type = "int";
+             // Default to int
+             if (strcmp(var_type, "int*") == 0) {
+            base_type = "int";
+        } else if (strcmp(var_type, "char*") == 0) {
+                 base_type = "char";
+             }
+             if (strcmp(base_type, right_type) != 0) {
+            printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible types: cannot assign ", right_type), " to array element of type "), base_type), ", line "), itos(line_num)));
+            return "";
+        }
+             expect("SEMICOL");
+             return concat(concat(concat(concat(concat(var_name, "["), index_expr), "] = "), right_expr), ";\n");
+         }
+         // --- Case 4: Error ---
+         else {
+             printf("%s\n", concat(concat(concat("Error: Invalid statement start. Expected '=', '(', or '[' after ID '", var_name), "', line "), itos(line_num)));
+             return "";
+         }
+}
+
+char* if_stmt() {
+    // TODO: This stub needs to be fully implemented
+    int line_num = token_lines[parser_pos];
+    expect("IF");
+    expr();
+    // Consume condition
+    expect("LBRACE");
+    while ((strcmp(peek(), "RBRACE") != 0)) {
+        statement();
+        // Consume body
+    }
+    expect("RBRACE");
+    if ((strcmp(peek(), "ELSE") == 0)) {
+        next();
+        // Consume 'else'
+        if ((strcmp(peek(), "IF") == 0)) {
+            statement();
+            // Consume 'if' block
+        } else {
+            expect("LBRACE");
+            while ((strcmp(peek(), "RBRACE") != 0)) {
+                statement();
+                // Consume body
+            }
+            expect("RBRACE");
+        }
+    }
+    return "/* C code for if-stmt (stub) */\n";
+}
+
+char* while_stmt() {
+    // TODO: This stub needs to be fully implemented
+    printf("%s\n", "Parsing WHILE (stub)...");
+    expect("WHILE");
+    expr();
+    // Consume condition
+    expect("LBRACE");
+    while ((strcmp(peek(), "RBRACE") != 0)) {
+        statement();
+        // Consume body
+    }
+    expect("RBRACE");
+    return "/* C code for while-stmt (stub) */\n";
+}
+
+char* return_stmt() {
+    int line_num = token_lines[parser_pos];
+    expect("RETURN");
+    char* c_expr = expr();
+    char* c_type = expr_type;
+    expect("SEMICOL");
+    // TODO: Type check 'c_type' against current function's return type
+    return concat(concat("return ", c_expr), ";\n");
+}
+
 char* comment_stmt() {
     next();
     return "";
