@@ -109,7 +109,6 @@ ah int main() {
     boo("--- Tokenizing ---");
     n_tokens = tokenize(code);
     boo("--- Tokenizing Complete ---");
-    print_token();
 
     // 2. Parse
     boo("--- Parsing ---");
@@ -241,13 +240,15 @@ ah char* let_stmt(int is_global) {
         // --- Case 1: Declaration with Assignment (e.g., beg x = 10) ---
         next();
         
-        // We will need expr() later. For now, just consume one token.
-        // TODO: Replace this with call to expr()
-        beg int val_tok = next(); // Stub: consume value
-        beg char* right_expr = token_pool + token_values[val_tok];
-        // END TODO
+        beg char* right_expr = expr();
+        beg char* right_type = expr_type;
         
-        // TODO: Add type checking logic from Python
+        if var_type == "int" {
+            var_type = right_type; // Infer type
+        } else if var_type != right_type {
+            boo("Error: Incompatible type " + right_type + " to " + var_type + ", line " + itos(line_num));
+            return "";
+        }
         
         expect("SEMICOL");
         add_symbol(is_global, var_name, var_type);
@@ -432,6 +433,150 @@ ah char* additive() {
     
     expr_type = left_type;
     return code;
+}
+
+ah char* multiplicative() {
+    // Handles: expr (* | /) expr
+    beg char* code = unary();
+    beg char* left_type = expr_type;
+
+    while peek() == "MUL" || peek() == "DIV" {
+        beg int op_idx = next();
+        beg char* op = op_to_c_op(token_types[op_idx]);
+        
+        beg char* right_code = unary();
+        beg char* right_type = expr_type;
+
+        if left_type != "int" || right_type != "int" {
+            boo("Error: Operators '*' and '/' can only be used on integers, line " + itos(token_lines[op_idx]));
+            return "";
+        }
+        
+        code = code + " " + op + " " + right_code;
+        expr_type = "int";
+        left_type = "int";
+    }
+    
+    expr_type = left_type;
+    return code;
+}
+
+ah char* unary() {
+    // Handles: -expr
+    if peek() == "MINUS" {
+        beg int op_idx = next(); // Consume '-'
+        
+        beg char* code = unary(); // Recursive call
+        
+        if expr_type != "int" {
+            boo("Error: Unary '-' operator can only be applied to integers, line " + itos(token_lines[op_idx]));
+            return "";
+        }
+        
+        expr_type = "int";
+        return "-" + code;
+    }
+    
+    return atom();
+}
+
+ah char* atom() {
+    // Handles: literals, variables, (expr), fn_call(), arr[idx]
+    // This is the first function to set the global 'expr_type'.
+
+    beg int tok_idx = next();
+    beg char* tok_type = token_types[tok_idx];
+    beg int tok_val_idx = token_values[tok_idx];
+    beg int tok_line = token_lines[tok_idx];
+    
+    // Case 1: Literals
+    if tok_type == "NUMBER" {
+        expr_type = "int";
+        return token_pool + tok_val_idx;
+    }
+    else if tok_type == "CHAR" {
+        expr_type = "char";
+        return token_pool + tok_val_idx;
+    }
+    else if tok_type == "STRING" {
+        expr_type = "char*";
+        return token_pool + tok_val_idx;
+    }
+    
+    // Case 2: Parenthesized Expression
+    else if tok_type == "LPAREN" {
+        beg char* code = expr();
+        // expr_type is already set by the call above
+        expect("RPAREN");
+        return "(" + code + ")";
+    }
+
+    // Case 3: Identifier (var, array index, function call)
+    else if tok_type == "ID" {
+        beg char* var_name = token_pool + tok_val_idx;
+        
+        // Look for symbol in local, then global scope
+        beg char* sym_type = get_symbol_type(0, var_name);
+        
+        if sym_type == "" {
+            boo("Error: Undeclared identifier '" + var_name + "' on line " + itos(tok_line));
+            return "";
+        }
+        
+        // Sub-case 3a: Function Call - ID()
+        if peek() == "LPAREN" {
+            next();
+            expr_type = sym_type; // Type is the function's return type
+            beg char* c_code = var_name + "(";
+            
+            beg int arg_count = 0;
+            while peek() != "RPAREN" {
+                if arg_count > 0 {
+                    expect("COMMA");
+                    c_code = c_code + ", ";
+                }
+                c_code = c_code + expr();
+                arg_count = arg_count + 1;
+            }
+            expect("RPAREN");
+            return c_code + ")";
+        }
+        // Sub-case 3b: Array Access - ID[]
+        else if peek() == "LSQUARE" {
+            if str_ends_with(sym_type, '*') == 0 {
+                boo("Error: Variable '" + var_name + "' is not an array and cannot be indexed, line " + itos(tok_line));
+                return "";
+            }
+            next();
+            
+            beg char* idx_code = expr();
+            if expr_type != "int" {
+                boo("Error: Array index must be an integer, line " + itos(tok_line));
+                return "";
+            }
+            expect("RSQUARE");
+            
+            // Set type to the base type (e.g., "int*" -> "int")
+            // We need a string function for this.
+            // For now, we assume simple types.
+            if sym_type == "int*" { expr_type = "int"; }
+            else if sym_type == "char*" { expr_type = "char"; }
+            else { expr_type = "int"; } // Default assumption
+            
+            return var_name + "[" + idx_code + "]";
+        }
+        // Sub-case 3c: Simple Variable
+        else {
+            expr_type = sym_type;
+            return var_name;
+        }
+    }
+    
+    // Case 4: Error
+    else {
+        boo("Error: Unexpected token in expression: " + tok_type + " on line " + itos(tok_line));
+        return "";
+    }
 }
 
 

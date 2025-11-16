@@ -97,7 +97,6 @@ int main() {
     printf("%s\n", "--- Tokenizing ---");
     n_tokens = tokenize(code);
     printf("%s\n", "--- Tokenizing Complete ---");
-    print_token();
     // 2. Parse
     printf("%s\n", "--- Parsing ---");
     char* c_code = parse();
@@ -215,13 +214,15 @@ char* let_stmt(int is_global) {
     if (strcmp(peek(), "ASSIGN") == 0) {
         // --- Case 1: Declaration with Assignment (e.g., beg x = 10) ---
         next();
-        // We will need expr() later. For now, just consume one token.
-        // TODO: Replace this with call to expr()
-        int val_tok = next();
-        // Stub: consume value
-        char* right_expr = token_pool + token_values[val_tok];
-        // END TODO
-        // TODO: Add type checking logic from Python
+        char* right_expr = expr();
+        char* right_type = expr_type;
+        if (strcmp(var_type, "int") == 0) {
+            var_type = right_type;
+            // Infer type
+        } else if (strcmp(var_type, right_type) != 0) {
+                   printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible type ", right_type), " to "), var_type), ", line "), itos(line_num)));
+                   return "";
+               }
         expect("SEMICOL");
         add_symbol(is_global, var_name, var_type);
         // C code: e.g., "int x = 5;"
@@ -379,6 +380,136 @@ char* additive() {
     }
     expr_type = left_type;
     return code;
+}
+
+char* multiplicative() {
+    // Handles: expr (* | /) expr
+    char* code = unary();
+    char* left_type = expr_type;
+    while (strcmp(peek(), "MUL") == 0 || strcmp(peek(), "DIV") == 0) {
+        int op_idx = next();
+        char* op = op_to_c_op(token_types[op_idx]);
+        char* right_code = unary();
+        char* right_type = expr_type;
+        if (strcmp(left_type, "int") != 0 || strcmp(right_type, "int") != 0) {
+            printf("%s\n", concat("Error: Operators '*' and '/' can only be used on integers, line ", itos(token_lines[op_idx])));
+            return "";
+        }
+        code = concat(concat(concat(concat(code, " "), op), " "), right_code);
+        expr_type = "int";
+        left_type = "int";
+    }
+    expr_type = left_type;
+    return code;
+}
+
+char* unary() {
+    // Handles: -expr
+    if (strcmp(peek(), "MINUS") == 0) {
+        int op_idx = next();
+        // Consume '-'
+        char* code = unary();
+        // Recursive call
+        if (strcmp(expr_type, "int") != 0) {
+            printf("%s\n", concat("Error: Unary '-' operator can only be applied to integers, line ", itos(token_lines[op_idx])));
+            return "";
+        }
+        expr_type = "int";
+        return concat("-", code);
+    }
+    return atom();
+}
+
+char* atom() {
+    // Handles: literals, variables, (expr), fn_call(), arr[idx]
+    // This is the first function to set the global 'expr_type'.
+    int tok_idx = next();
+    char* tok_type = token_types[tok_idx];
+    int tok_val_idx = token_values[tok_idx];
+    int tok_line = token_lines[tok_idx];
+    // Case 1: Literals
+    if (strcmp(tok_type, "NUMBER") == 0) {
+        expr_type = "int";
+        return token_pool + tok_val_idx;
+    } else if (strcmp(tok_type, "CHAR") == 0) {
+             expr_type = "char";
+             return token_pool + tok_val_idx;
+         } else if (strcmp(tok_type, "STRING") == 0) {
+             expr_type = "char*";
+             return token_pool + tok_val_idx;
+         }
+         // Case 2: Parenthesized Expression
+         else if (strcmp(tok_type, "LPAREN") == 0) {
+             char* code = expr();
+             // expr_type is already set by the call above
+             expect("RPAREN");
+             return concat(concat("(", code), ")");
+         }
+         // Case 3: Identifier (var, array index, function call)
+         else if (strcmp(tok_type, "ID") == 0) {
+             char* var_name = token_pool + tok_val_idx;
+             // Look for symbol in local, then global scope
+             char* sym_type = get_symbol_type(0, var_name);
+             if (strcmp(sym_type, "") == 0) {
+            printf("%s\n", concat(concat(concat("Error: Undeclared identifier '", var_name), "' on line "), itos(tok_line)));
+            return "";
+        }
+        // Sub-case 3a: Function Call - ID()
+
+             if (strcmp(peek(), "LPAREN") == 0) {
+            next();
+            expr_type = sym_type;
+            // Type is the function's return type
+            char* c_code = concat(var_name, "(");
+            int arg_count = 0;
+            while (strcmp(peek(), "RPAREN") != 0) {
+                if (arg_count > 0) {
+                    expect("COMMA");
+                    c_code = concat(c_code, ", ");
+                }
+                c_code = concat(c_code, expr());
+                arg_count = arg_count + 1;
+            }
+            expect("RPAREN");
+            return concat(c_code, ")");
+        }
+        // Sub-case 3b: Array Access - ID[]
+        else if (strcmp(peek(), "LSQUARE") == 0) {
+                 if (str_ends_with(sym_type, '*') == 0) {
+                printf("%s\n", concat(concat(concat("Error: Variable '", var_name), "' is not an array and cannot be indexed, line "), itos(tok_line)));
+                return "";
+            }
+                 next();
+                 char* idx_code = expr();
+                 if (strcmp(expr_type, "int") != 0) {
+                printf("%s\n", concat("Error: Array index must be an integer, line ", itos(tok_line)));
+                return "";
+            }
+                 expect("RSQUARE");
+                 // Set type to the base type (e.g., "int*" -> "int")
+                 // We need a string function for this.
+                 // For now, we assume simple types.
+                 if (strcmp(sym_type, "int*") == 0) {
+                expr_type = "int";
+            } else if (strcmp(sym_type, "char*") == 0) {
+                     expr_type = "char";
+                 } else {
+                     expr_type = "int";
+                 }
+                 // Default assumption
+                 return concat(concat(concat(var_name, "["), idx_code), "]");
+             }
+             // Sub-case 3c: Simple Variable
+             else {
+                 expr_type = sym_type;
+                 return var_name;
+             }
+         }
+         // Case 4: Error
+         else {
+             printf("%s\n", concat(concat(concat("Error: Unexpected token in expression: ", tok_type), " on line "), itos(tok_line)));
+             return "";
+         }
 }
 
 // =============================================================
