@@ -44,6 +44,11 @@ char* global_decl();
 char* fn_decl();
 char* statement();
 char* let_stmt(int is_global);
+char* print_stmt();
+char* if_stmt();
+char* while_stmt();
+char* return_stmt();
+char* id_stmt();
 char* comment_stmt();
 char* expr();
 char* logical();
@@ -142,15 +147,15 @@ char* global_decl() {
 }
 
 char* fn_decl() {
-    // Consume the function prototype/definition
-    // ah int my_func(int a) { ... }
-    expect("FN");
+    // Parses a function declaration or definition
+    int fn_tok_idx = expect("FN");
+    int indent = token_cols[fn_tok_idx];
+    int line_num = token_lines[fn_tok_idx];
     // --- Get Type ---
     char* fn_type = "int";
     // Default type
-    int fn_type_idx = -1;
     if (strcmp(peek(), "TYPE") == 0) {
-        fn_type_idx = next();
+        int fn_type_idx = next();
         fn_type = token_pool + token_values[fn_type_idx];
     }
     // --- Get Name ---
@@ -159,32 +164,116 @@ char* fn_decl() {
     char* fn_name = token_pool + token_values[fn_name_idx];
     // --- Add to global ---
     add_symbol(1, fn_name, fn_type);
+    // --- Parse parameters
     expect("LPAREN");
+    // Parallel arrays to store parameters
+    char* param_types[20];
+    char* param_names[20];
+    char* param_arrays[20];
+    int n_params = 0;
     while (strcmp(peek(), "RPAREN") != 0) {
-        next();
-        // Consume params
+        // Get param type (default int)
+        char* param_type = "int";
+        if (strcmp(peek(), "TYPE") == 0) {
+            int param_type_idx = next();
+            param_type = token_pool + token_values[param_type_idx];
+        }
+        // Get param name
+
+        int param_name_idx = expect("ID");
+        char* param_name = token_pool + token_values[param_name_idx];
+        // Check for array param part
+        char* param_array_part = "";
+        if (strcmp(peek(), "LSQUARE") == 0) {
+            next();
+            // Get array size
+            char* size_str = "";
+            if (strcmp(peek(), "NUMBER") == 0) {
+                int size_idx = next();
+                size_str = token_pool + token_values[size_idx];
+            }
+            expect("RSQUARE");
+            param_array_part = concat(concat("[", size_str), "]");
+        }
+        // Store param
+
+        param_types[n_params] = param_type;
+        param_names[n_params] = param_name;
+        param_arrays[n_params] = param_array_part;
+        n_params = n_params + 1;
+        if (strcmp(peek(), "COMMA") == 0) {
+            next();
+        }
     }
     expect("RPAREN");
-    // --- Inside the LBRACE branch ---
-    if (strcmp(peek(), "LBRACE") == 0) {
-        // Function Definition
-        next();
-        // --- Setup local scope ---
-        clear_local_symbols();
-        // TODO: Loop through params and add_symbol("local", ...)
-        // ---
-        char* body = "";
-        while (strcmp(peek(), "RBRACE") != 0) {
-            // TODO: This needs to call statement(), not next()
-            next();
-            // Stub
+    // --- Build Parameter List String ---
+    char* param_list = "";
+    int i = 0;
+    while (i < n_params) {
+        if (i > 0) {
+            param_list = concat(param_list, ", ");
         }
-        expect("RBRACE");
-        return "/* C code for function (stub) */\n";
-    } else {
-        // ... (prototype logic) ...
+        param_list = concat(concat(concat(concat(param_list, param_types[i]), " "), param_names[i]), param_arrays[i]);
+        i = i + 1;
     }
-    return "/* C code for function (stub) */\n";
+    // --- Check for Prototype (;) or Definition ({) ---
+    if (strcmp(peek(), "SEMICOL") == 0) {
+        // Function Declaration (Prototype)
+        next();
+        return concat(concat(concat(concat(concat(fn_type, " "), fn_name), "("), param_list), ");\n");
+    } else if (strcmp(peek(), "LBRACE") == 0) {
+             // Function Definition
+             next();
+             // --- Setup local scope ---
+             clear_local_symbols();
+             i = 0;
+             while (i < n_params) {
+            char* var_type = param_types[i];
+            if (strcmp(param_arrays[i], "") != 0) {
+                var_type = concat(var_type, "*");
+                // Store 'int arr[]' as 'int*'
+            }
+            add_symbol(0, param_names[i], var_type);
+            i = i + 1;
+        }
+             // --- Parse function body ---
+             char* body = "";
+             while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
+            body = concat(concat(body, statement()), "\n");
+        }
+             expect("RBRACE");
+             // Build final C code
+             return concat(concat(concat(concat(concat(concat(concat(fn_type, " "), fn_name), "("), param_list), ") {\n"), body), "}\n");
+         } else {
+             printf("%s\n", concat("Error: Expected ';' or '{' after function signature, line ", itos(line_num)));
+             return "";
+         }
+}
+
+char* statement() {
+    // Dispatches to the correct statement parser.
+    char* tok = peek();
+    if (strcmp(tok, "LET") == 0) {
+        return let_stmt(0);
+        // 0 for local
+    } else if (strcmp(tok, "PRINT") == 0) {
+               return print_stmt();
+           } else if (strcmp(tok, "IF") == 0) {
+               return if_stmt();
+           } else if (strcmp(tok, "WHILE") == 0) {
+               return while_stmt();
+           } else if (strcmp(tok, "RETURN") == 0) {
+               return return_stmt();
+           } else if (strcmp(tok, "ID") == 0) {
+               return id_stmt();
+           } else if (strcmp(tok, "COMMENT") == 0) {
+               return comment_stmt();
+           } else {
+               printf("%s\n", concat(concat(concat("Error: Unexpected statement: ", tok), " on line "), itos(token_lines[parser_pos])));
+               next();
+               // Consume bad token
+               return "";
+           }
 }
 
 char* let_stmt(int is_global) {
@@ -193,9 +282,8 @@ char* let_stmt(int is_global) {
     // --- Get Type ---
     char* var_type = "int";
     // Default type
-    int var_type_idx = -1;
     if (strcmp(peek(), "TYPE") == 0) {
-        var_type_idx = next();
+        int var_type_idx = next();
         var_type = token_pool + token_values[var_type_idx];
     }
     // --- Get Name ---
@@ -259,6 +347,26 @@ char* let_stmt(int is_global) {
              // Consume bad token
              return "";
          }
+}
+
+char* print_stmt() {
+    int line_num = token_lines[parser_pos];
+    expect("PRINT");
+    expect("LPAREN");
+    char* c_expr = expr();
+    char* c_type = expr_type;
+    expect("RPAREN");
+    expect("SEMICOL");
+    if (strcmp(c_type, "int") == 0) {
+        return concat(concat("printf(\"%d\\n\", ", c_expr), ");\n");
+    } else if (strcmp(c_type, "char") == 0) {
+               return concat(concat("printf(\"%c\\n\", ", c_expr), ");\n");
+           } else if (strcmp(c_type, "char*") == 0) {
+               return concat(concat("printf(\"%s\\n\", ", c_expr), ");\n");
+           } else {
+               printf("%s\n", concat(concat(concat("Error: Unprintable type '", c_type), "' on line "), itos(line_num)));
+               return "";
+           }
 }
 
 char* comment_stmt() {
