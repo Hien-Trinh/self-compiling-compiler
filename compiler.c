@@ -25,8 +25,27 @@ int n_tokens = 0;
 // --- Parser State ---
 int parser_pos = 0;
 // Current token index for the parser
+char* current_fn_ret_type;
+// Stores return type of fn being parsed
 char* expr_type;
 // Type of the last parsed expression, works like a forgetful stack
+// --- Symbol Table Storage ---
+// We store 'char*' pointers for names and types.
+// The Stage 0 compiler will get the name strings from the token_pool.
+// The type strings will be string literals (e.g., "int", "char*").
+// Global Scope (self.env)
+char* global_names[100];
+char* global_types[100];
+int n_globals = 0;
+// Local Scope (self.variables)
+char* local_names[100];
+char* local_types[100];
+int n_locals = 0;
+// --- C Code Generation Buffer ---
+char c_code_buffer[100000];
+// 100k buffer for generated C
+int c_code_pos = 0;
+// Current position in the buffer
 // =============================================================
 // Function Declarations
 // =============================================================
@@ -39,17 +58,17 @@ char* check_keywords(char* s);
 int add_simple_token(int index, char* type, int line, int col);
 int tokenize(char* source_code);
 // --- Parser Helpers ---
-char* parse();
-char* global_decl();
-char* fn_decl();
-char* statement();
-char* let_stmt(int is_global);
-char* print_stmt();
-char* if_stmt();
-char* while_stmt();
-char* return_stmt();
-char* id_stmt();
-char* comment_stmt();
+int parse();
+int global_decl();
+int fn_decl();
+int statement();
+int let_stmt(int is_global);
+int print_stmt();
+int if_stmt();
+int while_stmt();
+int return_stmt();
+int id_stmt();
+int comment_stmt();
 char* expr();
 char* logical();
 char* relational();
@@ -65,33 +84,7 @@ char* get_symbol_type(int is_global, char* name);
 int add_symbol(int is_global, char* name, char* type);
 int str_ends_with(char* s, char c);
 char* op_to_c_op(char* tok_type);
-// --- Symbol Table Storage ---
-// We store 'char*' pointers for names and types.
-// The Stage 0 compiler will get the name strings from the token_pool.
-// The type strings will be string literals (e.g., "int", "char*").
-// Global Scope (self.env)
-char* global_names[100];
-char* global_types[100];
-int n_globals = 0;
-// Local Scope (self.variables)
-char* local_names[100];
-char* local_types[100];
-int n_locals = 0;
-void print_token() {
-    printf("%s\n", "--- Stored Tokens ---");
-    int i = 0;
-    int pool_pos = 0;
-    while ((i < n_tokens)) {
-        printf("%s\n", token_types[i]);
-        pool_pos = token_values[i];
-        if ((pool_pos != -1)) {
-            // It has a value. Print it using pointer arithmetic.
-            printf("%s\n", token_pool + pool_pos);
-        }
-        i = i + 1;
-    }
-}
-
+int emit(char* s);
 // =============================================================
 // Main Entry Point
 // =============================================================
@@ -104,36 +97,34 @@ int main() {
     printf("%s\n", "--- Tokenizing Complete ---");
     // 2. Parse
     printf("%s\n", "--- Parsing ---");
-    char* c_code = parse();
+    parse();
     printf("%s\n", "--- Generated C Code ---");
-    printf("%s\n", c_code);
+    printf("%s\n", c_code_buffer);
     return 0;
 }
 
 // =============================================================
 // Parser
 // =============================================================
-char* parse() {
+int parse() {
     // Main parser entry point.
     // Loops until EOF, parsing all global declarations.
-    char* code_buffer = "";
-    // This will hold the entire generated C file
     while (strcmp(peek(), "EOF") != 0) {
-        code_buffer = concat(code_buffer, global_decl());
+        global_decl();
     }
-    return code_buffer;
+    return 0;
 }
 
-char* global_decl() {
+int global_decl() {
     // Dispatches to the correct parser function
     // based on the next token.
     char* tok = peek();
     if (strcmp(tok, "FN") == 0) {
-        return fn_decl();
+        fn_decl();
     } else if (strcmp(tok, "LET") == 0) {
-               return let_stmt(1);
+               let_stmt(1);
            } else if (strcmp(tok, "COMMENT") == 0) {
-               return comment_stmt();
+               comment_stmt();
            } else {
                // Error handling
                int tok_line = token_lines[parser_pos];
@@ -141,12 +132,12 @@ char* global_decl() {
                printf("%s\n", concat("Expected FN, LET, or COMMENT, but got: ", tok));
                // Consume the bad token to prevent infinite loop
                next();
-               return "";
-               // Return empty string for this declaration
+               return -1;
            }
+    return 0;
 }
 
-char* fn_decl() {
+int fn_decl() {
     // Parses a function declaration or definition
     int fn_tok_idx = expect("FN");
     int indent = token_cols[fn_tok_idx];
@@ -162,17 +153,28 @@ char* fn_decl() {
 
     int fn_name_idx = expect("ID");
     char* fn_name = token_pool + token_values[fn_name_idx];
-    // --- Add to global ---
+    // --- Store for type-checking 'return' ---
+    current_fn_ret_type = fn_type;
     add_symbol(1, fn_name, fn_type);
-    // --- Parse parameters
     expect("LPAREN");
+    emit(fn_type);
+    emit(" ");
+    emit(fn_name);
+    emit("(");
+    // --- Parse parameters ---
     // Parallel arrays to store parameters
     char* param_types[20];
     char* param_names[20];
     char* param_arrays[20];
     int n_params = 0;
+    int i = 0;
     while (strcmp(peek(), "RPAREN") != 0) {
+        if (n_params > 0) {
+            expect("COMMA");
+            emit(", ");
+        }
         // Get param type (default int)
+
         char* param_type = "int";
         if (strcmp(peek(), "TYPE") == 0) {
             int param_type_idx = next();
@@ -182,18 +184,25 @@ char* fn_decl() {
 
         int param_name_idx = expect("ID");
         char* param_name = token_pool + token_values[param_name_idx];
+        emit(param_type);
+        emit(" ");
+        emit(param_name);
         // Check for array param part
         char* param_array_part = "";
         if (strcmp(peek(), "LSQUARE") == 0) {
             next();
             // Get array size
-            char* size_str = "";
             if (strcmp(peek(), "NUMBER") == 0) {
                 int size_idx = next();
-                size_str = token_pool + token_values[size_idx];
+                char* size_str = token_pool + token_values[size_idx];
+                emit("[");
+                emit(size_str);
+                emit("]");
+                param_array_part = concat(concat("[", size_str), "]");
+            } else {
+                param_array_part = "";
             }
             expect("RSQUARE");
-            param_array_part = concat(concat("[", size_str), "]");
         }
         // Store param
 
@@ -201,37 +210,32 @@ char* fn_decl() {
         param_names[n_params] = param_name;
         param_arrays[n_params] = param_array_part;
         n_params = n_params + 1;
-        if (strcmp(peek(), "COMMA") == 0) {
-            next();
-        }
     }
     expect("RPAREN");
-    // --- Build Parameter List String ---
-    char* param_list = "";
-    int i = 0;
-    while (i < n_params) {
-        if (i > 0) {
-            param_list = concat(param_list, ", ");
-        }
-        param_list = concat(concat(concat(concat(param_list, param_types[i]), " "), param_names[i]), param_arrays[i]);
-        i = i + 1;
-    }
+    emit(")");
     // --- Check for Prototype (;) or Definition ({) ---
     if (strcmp(peek(), "SEMICOL") == 0) {
         // Function Declaration (Prototype)
         next();
-        return concat(concat(concat(concat(concat(fn_type, " "), fn_name), "("), param_list), ");\n");
+        emit(";\n");
+        return 0;
     } else if (strcmp(peek(), "LBRACE") == 0) {
              // Function Definition
              next();
+             emit(" {\n");
              // --- Setup local scope ---
              clear_local_symbols();
              i = 0;
              while (i < n_params) {
             char* var_type = param_types[i];
             if (strcmp(param_arrays[i], "") != 0) {
-                var_type = concat(var_type, "*");
-                // Store 'int arr[]' as 'int*'
+                if (strcmp(var_type, "int") == 0) {
+                    var_type = "int*";
+                } else if (strcmp(var_type, "char") == 0) {
+                         var_type = "char*";
+                     } else if (strcmp(var_type, "char*") == 0) {
+                         var_type = "char**";
+                     }
             }
             add_symbol(0, param_names[i], var_type);
             i = i + 1;
@@ -239,44 +243,47 @@ char* fn_decl() {
              // --- Parse function body ---
              char* body = "";
              while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
-            body = concat(concat(body, statement()), "\n");
+            statement();
         }
+             printf("%s\n", body);
              expect("RBRACE");
              // Build final C code
-             return concat(concat(concat(concat(concat(concat(concat(fn_type, " "), fn_name), "("), param_list), ") {\n"), body), "}\n");
+             emit("}\n");
+             return 0;
          } else {
              printf("%s\n", concat("Error: Expected ';' or '{' after function signature, line ", itos(line_num)));
-             return "";
+             return -1;
          }
 }
 
-char* statement() {
+int statement() {
     // Dispatches to the correct statement parser.
     char* tok = peek();
     if (strcmp(tok, "LET") == 0) {
-        return let_stmt(0);
+        let_stmt(0);
         // 0 for local
     } else if (strcmp(tok, "PRINT") == 0) {
-               return print_stmt();
+               print_stmt();
            } else if (strcmp(tok, "IF") == 0) {
-               return if_stmt();
+               if_stmt();
            } else if (strcmp(tok, "WHILE") == 0) {
-               return while_stmt();
+               while_stmt();
            } else if (strcmp(tok, "RETURN") == 0) {
-               return return_stmt();
+               return_stmt();
            } else if (strcmp(tok, "ID") == 0) {
-               return id_stmt();
+               id_stmt();
            } else if (strcmp(tok, "COMMENT") == 0) {
-               return comment_stmt();
+               comment_stmt();
            } else {
                printf("%s\n", concat(concat(concat("Error: Unexpected statement: ", tok), " on line "), itos(token_lines[parser_pos])));
                next();
                // Consume bad token
-               return "";
+               return -1;
            }
+    return 0;
 }
 
-char* let_stmt(int is_global) {
+int let_stmt(int is_global) {
     int line_num = token_lines[parser_pos];
     expect("LET");
     // --- Get Type ---
@@ -292,9 +299,8 @@ char* let_stmt(int is_global) {
     char* var_name = token_pool + token_values[var_name_idx];
     // Check redefinition
     if ((is_global == 0 && strcmp(get_symbol_type(0, var_name), "") != 0) || (is_global == 1 && strcmp(get_symbol_type(1, var_name), "") != 0)) {
-        printf("%s\n", "Error: Redefinition of variable");
-        printf("%s\n", var_name);
-        return "";
+        printf("%s\n", concat(concat(concat("Error: Redefinition of variable", var_name), ", line "), itos(line_num)));
+        return -1;
         // Error
     }
     // --- Parsing Cases ---
@@ -309,18 +315,24 @@ char* let_stmt(int is_global) {
             // Infer type
         } else if (strcmp(var_type, right_type) != 0) {
                    printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible type ", right_type), " to "), var_type), ", line "), itos(line_num)));
-                   return "";
+                   return -1;
                }
         expect("SEMICOL");
         add_symbol(is_global, var_name, var_type);
         // C code: e.g., "int x = 5;"
-        return concat(concat(concat(concat(concat(var_type, " "), var_name), " = "), right_expr), ";\n");
+        emit(var_type);
+        emit(" ");
+        emit(var_name);
+        emit(" = ");
+        emit(right_expr);
+        emit(";\n");
+        return 0;
     } else if (strcmp(peek(), "LSQUARE") == 0) {
              // --- Case 2: Array Declaration (e.g., beg int arr[10]) ---
              next();
              if (strcmp(var_type, "int") == 0) {
             printf("%s\n", concat("Error: Array declaration must have an explicit type on line", itos(line_num)));
-            return "";
+            return -1;
         }
              int size_tok = expect("NUMBER");
              char* size = token_pool + token_values[size_tok];
@@ -330,26 +342,36 @@ char* let_stmt(int is_global) {
              char* array_type = concat(var_type, "*");
              add_symbol(is_global, var_name, array_type);
              // C code: e.g., "int arr[10];"
-             return concat(concat(concat(concat(concat(var_type, " "), var_name), "["), size), "];\n");
+             emit(var_type);
+             emit(" ");
+             emit(var_name);
+             emit("[");
+             emit(size);
+             emit("];\n");
+             return 0;
          } else if (strcmp(peek(), "SEMICOL") == 0) {
              // --- Case 3: Declaration without Assignment (e.g., beg int x;) ---
              next();
              if (strcmp(var_type, "int") == 0) {
             printf("%s\n", concat("Error: Declaration without assignment must have explicit type on line", itos(line_num)));
-            return "";
+            return -1;
         }
              add_symbol(is_global, var_name, var_type);
              // C code: e.g., "int x;"
-             return concat(concat(concat(var_type, " "), var_name), ";\n");
+             emit(var_type);
+             emit(" ");
+             emit(var_name);
+             emit(";\n");
+             return 0;
          } else {
              printf("%s\n", concat("Error: Expected '=', '[', or ';' after variable name on line", itos(line_num)));
              next();
              // Consume bad token
-             return "";
+             return -1;
          }
 }
 
-char* print_stmt() {
+int print_stmt() {
     int line_num = token_lines[parser_pos];
     expect("PRINT");
     expect("LPAREN");
@@ -358,18 +380,21 @@ char* print_stmt() {
     expect("RPAREN");
     expect("SEMICOL");
     if (strcmp(c_type, "int") == 0) {
-        return concat(concat("printf(\"%d\\n\", ", c_expr), ");\n");
+        emit(concat(concat("printf(\"%d\\n\", ", c_expr), ");\n"));
+        return 0;
     } else if (strcmp(c_type, "char") == 0) {
-               return concat(concat("printf(\"%c\\n\", ", c_expr), ");\n");
+               emit(concat(concat("printf(\"%c\\n\", ", c_expr), ");\n"));
+               return 0;
            } else if (strcmp(c_type, "char*") == 0) {
-               return concat(concat("printf(\"%s\\n\", ", c_expr), ");\n");
+               emit(concat(concat("printf(\"%s\\n\", ", c_expr), ");\n"));
+               return 0;
            } else {
                printf("%s\n", concat(concat(concat("Error: Unprintable type '", c_type), "' on line "), itos(line_num)));
-               return "";
+               return -1;
            }
 }
 
-char* id_stmt() {
+int id_stmt() {
     // Handles statements beginning with an identifier:
     // 1. x = 10;        (Assignment)
     // 2. my_func(10);   (Function Call)
@@ -382,9 +407,9 @@ char* id_stmt() {
     // Declare right expression
     char* right_expr;
     char* right_type;
-    if ((strcmp(var_type, "") == 0)) {
+    if (strcmp(var_type, "") == 0) {
         printf("%s\n", concat(concat(concat("Error: Undeclared identifier '", var_name), "' on line "), itos(line_num)));
-        return "";
+        return -1;
     }
     // --- Case 1: Variable Assignment ---
 
@@ -396,10 +421,14 @@ char* id_stmt() {
         // Type check
         if (strcmp(var_type, right_type) != 0) {
             printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible ", right_type), " to "), var_type), " conversion on line "), itos(line_num)));
-            return "";
+            return -1;
         }
         expect("SEMICOL");
-        return concat(concat(concat(var_name, " = "), right_expr), ";\n");
+        emit(var_name);
+        emit(" = ");
+        emit(right_expr);
+        emit(";\n");
+        return 0;
     }
     // --- Case 2: Function Call ---
     else if (strcmp(peek(), "LPAREN") == 0) {
@@ -409,7 +438,7 @@ char* id_stmt() {
              char* args_code = "";
              int arg_count = 0;
              while (strcmp(peek(), "RPAREN") != 0) {
-            if ((arg_count > 0)) {
+            if (arg_count > 0) {
                 expect("COMMA");
                 args_code = concat(args_code, ", ");
             }
@@ -418,22 +447,26 @@ char* id_stmt() {
         }
              expect("RPAREN");
              expect("SEMICOL");
-             return concat(concat(concat(var_name, "("), args_code), ");\n");
+             emit(var_name);
+             emit("(");
+             emit(args_code);
+             emit(");\n");
+             return 0;
          }
          // --- Case 3: Array Assignment ---
          else if (strcmp(peek(), "LSQUARE") == 0) {
              next();
              // Check if var_type is a pointer
-             if ((str_ends_with(var_type, '*') == 0)) {
+             if (str_ends_with(var_type, '*') == 0) {
             printf("%s\n", concat(concat(concat("Error: Variable '", var_name), "' is not an array and cannot be indexed, line "), itos(line_num)));
-            return "";
+            return -1;
         }
         // Get index expression
 
              char* index_expr = expr();
-             if ((strcmp(expr_type, "int") != 0)) {
+             if (strcmp(expr_type, "int") != 0) {
             printf("%s\n", concat(concat(concat("Error: Array index must be an integer, got ", expr_type), ", line "), itos(line_num)));
-            return "";
+            return -1;
         }
              expect("RSQUARE");
              expect("ASSIGN");
@@ -450,76 +483,101 @@ char* id_stmt() {
              }
              if (strcmp(base_type, right_type) != 0) {
             printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible types: cannot assign ", right_type), " to array element of type "), base_type), ", line "), itos(line_num)));
-            return "";
+            return -1;
         }
              expect("SEMICOL");
-             return concat(concat(concat(concat(concat(var_name, "["), index_expr), "] = "), right_expr), ";\n");
+             emit(var_name);
+             emit("[");
+             emit(index_expr);
+             emit("] = ");
+             emit(right_expr);
+             emit(";\n");
+             return 0;
          }
          // --- Case 4: Error ---
          else {
              printf("%s\n", concat(concat(concat("Error: Invalid statement start. Expected '=', '(', or '[' after ID '", var_name), "', line "), itos(line_num)));
-             return "";
+             return -1;
          }
 }
 
-char* if_stmt() {
-    // TODO: This stub needs to be fully implemented
-    int line_num = token_lines[parser_pos];
+int if_stmt() {
     expect("IF");
-    expr();
-    // Consume condition
     expect("LBRACE");
-    while ((strcmp(peek(), "RBRACE") != 0)) {
+    emit("if (");
+    emit(expr());
+    emit(") {\n");
+    while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
         statement();
-        // Consume body
     }
     expect("RBRACE");
-    if ((strcmp(peek(), "ELSE") == 0)) {
+    emit("}\n");
+    // Consume any comments
+    while (strcmp(peek(), "COMMENT") == 0) {
+        comment_stmt();
+    }
+    // Handle else
+    if (strcmp(peek(), "ELSE") == 0) {
         next();
-        // Consume 'else'
-        if ((strcmp(peek(), "IF") == 0)) {
-            statement();
-            // Consume 'if' block
-        } else {
-            expect("LBRACE");
-            while ((strcmp(peek(), "RBRACE") != 0)) {
-                statement();
-                // Consume body
-            }
-            expect("RBRACE");
+        emit("else ");
+        // Case 1: else-if
+        if (strcmp(peek(), "IF") == 0) {
+            if_stmt();
         }
+        // Case 2: else
+        else if (strcmp(peek(), "LBRACE") == 0) {
+                 next();
+                 emit("{\n");
+                 while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
+                statement();
+            }
+                 expect("RBRACE");
+                 emit("}\n");
+             }
+             // Case 3: Error
+             else {
+                 int tok_line = token_lines[parser_pos];
+                 printf("%s\n", concat("Error: Expected 'if' or '{' after 'else', line ", itos(tok_line)));
+                 return -1;
+             }
     }
-    return "/* C code for if-stmt (stub) */\n";
+    return 0;
 }
 
-char* while_stmt() {
-    // TODO: This stub needs to be fully implemented
-    printf("%s\n", "Parsing WHILE (stub)...");
+int while_stmt() {
     expect("WHILE");
-    expr();
-    // Consume condition
     expect("LBRACE");
-    while ((strcmp(peek(), "RBRACE") != 0)) {
+    emit("while (");
+    emit(expr());
+    emit(") {\n");
+    while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
         statement();
-        // Consume body
     }
     expect("RBRACE");
-    return "/* C code for while-stmt (stub) */\n";
+    emit("}\n");
+    return 0;
 }
 
-char* return_stmt() {
+int return_stmt() {
     int line_num = token_lines[parser_pos];
     expect("RETURN");
-    char* c_expr = expr();
-    char* c_type = expr_type;
+    char* ret_expr = expr();
+    char* ret_type = expr_type;
     expect("SEMICOL");
-    // TODO: Type check 'c_type' against current function's return type
-    return concat(concat("return ", c_expr), ";\n");
+    // TODO: Type check 'ret_type' against current function's return type
+    if (strcmp(current_fn_ret_type, ret_type) != 0) {
+        printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible ", ret_type), " to "), current_fn_ret_type), " conversion on line "), itos(line_num)));
+        return -1;
+    }
+    emit("return ");
+    emit(ret_expr);
+    emit(";\n");
+    return 0;
 }
 
-char* comment_stmt() {
+int comment_stmt() {
     next();
-    return "";
+    return 0;
 }
 
 // =============================================================
@@ -919,6 +977,20 @@ char* op_to_c_op(char* tok_type) {
     return "";
 }
 
+int emit(char* s) {
+    // Appends a string 's' to the global c_code_buffer.
+    int i = 0;
+    int len = strlen(s);
+    while (i < len) {
+        c_code_buffer[c_code_pos] = s[i];
+        c_code_pos = c_code_pos + 1;
+        i = i + 1;
+    }
+    c_code_buffer[c_code_pos] = '\0';
+    // Keep buffer null-terminated
+    return 0;
+}
+
 // =============================================================
 // Tokenizer
 //
@@ -1058,9 +1130,9 @@ int tokenize(char* source_code) {
                  pos = pos + 2;
              } else if (c == '/') {
                  if (source_code[pos + 1] == '/') {
-                add_simple_token(token_count, "COMMENT", line_num, col);
-                token_count = token_count + 1;
-                pos = pos + 2;
+                // TODO: Maybe add comments
+                // add_simple_token(token_count, "COMMENT", line_num, col);
+                // token_count = token_count + 1; pos = pos + 2;
                 // Loop to skip till after newline or EOL
                 while (source_code[pos] != '\n') {
                     pos = pos + 1;
@@ -1270,8 +1342,8 @@ char* check_keywords(char* s) {
     return "ID";
 }
 
-// Helper to add a simple token (without a value) to the token arrays.
 int add_simple_token(int index, char* type, int line, int col) {
+    // Helper to add a simple token (without a value) to the token arrays.
     token_types[index] = type;
     token_values[index] = -1;
     // -1 means no value

@@ -8,13 +8,15 @@ int x = 0;
 
 // Comment
 void test() {
-  int x = "this" || "that";
-  printf("\d", x);
 }
 
 int main() {
   // Comment
-  char c;
+  char* fn_type = "int";
+  char* fn_name = "main";
+  char* param_list = "";
+  char* body = "printf(\"\%d\\n\", global_var);";
+  printf("%s\n", concat(concat(concat(concat(concat(concat(concat(fn_type, " "), fn_name), "("), param_list), ") {\n"), body), "\n}"));
   return 0;
 }
 

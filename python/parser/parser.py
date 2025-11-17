@@ -161,7 +161,7 @@ class Parser:
         elif t == 'COMMENT':
             return self.comment_stmt()
         else:
-            raise SyntaxError(f'Unexpected statement: {t}')
+            raise SyntaxError(f'Unexpected statement: {t}, {self.next()}')
 
     def let_stmt(self, is_global):
         line_num = self.expect('LET')[2]
