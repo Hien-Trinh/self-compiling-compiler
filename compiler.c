@@ -85,12 +85,22 @@ int add_symbol(int is_global, char* name, char* type);
 int str_ends_with(char* s, char c);
 char* op_to_c_op(char* tok_type);
 int emit(char* s);
+int c_include();
+int c_prototype();
+int c_helper();
+int preset_global_functions();
 // =============================================================
 // Main Entry Point
 // =============================================================
 int main() {
     // Test code with all global declaration types
     char* code = "// My Stage 1 Compiler\n\nbeg int global_var = 10;\n\nah int my_func();\n\nah int main() {\n    boo(global_var);\n}\n";
+    // C Include
+    c_include();
+    // C Prototype
+    c_prototype();
+    // Preset global function
+    preset_global_functions();
     // 1. Tokenize
     printf("%s\n", "--- Tokenizing ---");
     n_tokens = tokenize(code);
@@ -98,6 +108,8 @@ int main() {
     // 2. Parse
     printf("%s\n", "--- Parsing ---");
     parse();
+    // C Helpers
+    c_helper();
     printf("%s\n", "--- Generated C Code ---");
     printf("%s\n", c_code_buffer);
     return 0;
@@ -988,6 +1000,50 @@ int emit(char* s) {
     }
     c_code_buffer[c_code_pos] = '\0';
     // Keep buffer null-terminated
+    return 0;
+}
+
+int c_include() {
+    // Emit C include
+    emit("#include <stdio.h>\n");
+    emit("#include <stdlib.h>\n");
+    emit("#include <string.h>\n\n");
+    return 0;
+}
+
+int c_prototype() {
+    // Emit C prototype
+    emit("char* concat(char* str1, char* str2);\n");
+    emit("char* itos(int x);\n");
+    emit("char* ctos(char c);\n\n");
+    return 0;
+}
+
+int c_helper() {
+    // Emit C helper
+    emit("\nchar* concat(char* str1, char* str2) {\n");
+    emit("static char buf[1024];\n");
+    emit("snprintf(buf, sizeof(buf), \"%s%s\", str1, str2);\n");
+    emit("return buf;\n}\n\n");
+    emit("char* itos(int x) {\n");
+    emit("static char buf[32];\n");
+    emit("snprintf(buf, sizeof(buf), \"%d\", x);\n");
+    emit("return buf;\n}\n\n");
+    emit("char* ctos(char c) {\n");
+    emit("static char buf[2];\n");
+    emit("buf[0] = c;\n");
+    emit("buf[1] = '\\0';\n");
+    emit("return buf;\n}\n\n");
+    return 0;
+}
+
+int preset_global_functions() {
+    // Preset global scope with util functions
+    add_symbol(1, "concat", "char*");
+    add_symbol(1, "ctos", "char*");
+    add_symbol(1, "itos", "char*");
+    add_symbol(1, "strlen", "int");
+    add_symbol(1, "strcmp", "int");
     return 0;
 }
 
