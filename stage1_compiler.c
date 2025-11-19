@@ -699,27 +699,38 @@ int relational() {
             char* op = op_to_c_op(token_types[op_idx]);
             int line = token_lines[op_idx];
             // 2. Peek RHS
-            char* rhs_code = peek_code("additive");
-            char* rhs_type = expr_type;
+            char* right_code = peek_code("additive");
+            char* right_type = expr_type;
             // 3. Generate Code
-            if ((strcmp(left_type, "char*") == 0 && strcmp(rhs_type, "char*") == 0)) {
-                if ((strcmp(op, "==") == 0)) {
+            if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0) {
+                if (strcmp(op, "==") == 0) {
                     emit("strcmp(");
                     emit(left_buf);
                     emit(", ");
-                    emit(rhs_code);
+                    emit(right_code);
                     emit(") == 0");
-                } else if ((strcmp(op, "!=") == 0)) {
+                } else if (strcmp(op, "!=") == 0) {
                            emit("strcmp(");
                            emit(left_buf);
                            emit(", ");
-                           emit(rhs_code);
+                           emit(right_code);
                            emit(") != 0");
                        } else {
                            printf("%s\n", concat(concat(concat("Error: Operator '", op), "' not allowed on strings, line "), itos(line)));
                            return -1;
                        }
-            } else if ((strcmp(left_type, "char*") == 0 || strcmp(rhs_type, "char*") == 0)) {
+            } else if ((strcmp(left_type, "char*") == 0 && strcmp(right_type, "int") == 0) || (strcmp(left_type, "int") == 0 && strcmp(right_type, "char*") == 0)) {
+                       if (strcmp(op, "==") == 0 || strcmp(op, "!=") == 0) {
+                    emit(left_buf);
+                    emit(" ");
+                    emit(op);
+                    emit(" ");
+                    emit(right_code);
+                } else {
+                    printf("%s\n", concat(concat(concat("Error: Operator '", op), "' not allowed on strings, line "), itos(line)));
+                    return -1;
+                }
+                   } else if (strcmp(left_type, "char*") == 0 || strcmp(right_type, "char*") == 0) {
                        printf("%s\n", concat("Error: Comparison between string and non-string, line ", itos(line)));
                        return -1;
                    } else {
@@ -728,7 +739,7 @@ int relational() {
                        emit(" ");
                        emit(op);
                        emit(" ");
-                       emit(rhs_code);
+                       emit(right_code);
                    }
             expr_type = "int";
             left_type = "int";

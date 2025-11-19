@@ -72,7 +72,7 @@ return 1;
 char* input_file = argv[1];
 char* output_file = argv[2];
 char* code = read_file(input_file);
-if () {
+if (code == 0) {
 printf("%s\n", "Error: Could not read input file.");
 return 1;
 }
@@ -588,21 +588,21 @@ while (strcmp(peek(), "EQ") == 0 || strcmp(peek(), "NE") == 0 || strcmp(peek(), 
 int op_idx = next();
 char* op = op_to_c_op(token_types[op_idx]);
 int line = token_lines[op_idx];
-char* rhs_code = peek_code("additive");
-char* rhs_type = expr_type;
-if ((strcmp(left_type, "char*") == 0 && strcmp(rhs_type, "char*") == 0)) {
-if ((strcmp(op, "==") == 0)) {
+char* right_code = peek_code("additive");
+char* right_type = expr_type;
+if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0) {
+if (strcmp(op, "==") == 0) {
 emit("strcmp(");
 emit(left_buf);
 emit(", ");
-emit(rhs_code);
+emit(right_code);
 emit(") == 0");
 }
-else if ((strcmp(op, "!=") == 0)) {
+else if (strcmp(op, "!=") == 0) {
 emit("strcmp(");
 emit(left_buf);
 emit(", ");
-emit(rhs_code);
+emit(right_code);
 emit(") != 0");
 }
 else {
@@ -610,7 +610,20 @@ printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not
 return -1;
 }
 }
-else if ((strcmp(left_type, "char*") == 0 || strcmp(rhs_type, "char*") == 0)) {
+else if ((strcmp(left_type, "char*") == 0 && strcmp(right_type, "int") == 0) || (strcmp(left_type, "int") == 0 && strcmp(right_type, "char*") == 0)) {
+if (strcmp(op, "==") == 0 || strcmp(op, "!=") == 0) {
+emit(left_buf);
+emit(" ");
+emit(op);
+emit(" ");
+emit(right_code);
+}
+else {
+printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed on strings, line ")"Error: Operator '" + itos(line));
+return -1;
+}
+}
+else if (strcmp(left_type, "char*") == 0 || strcmp(right_type, "char*") == 0) {
 printf("%s\n", "Error: Comparison between string and non-string, line " + itos(line));
 return -1;
 }
@@ -619,7 +632,7 @@ emit(left_buf);
 emit(" ");
 emit(op);
 emit(" ");
-emit(rhs_code);
+emit(right_code);
 }
 expr_type = "int";
 left_type = "int";
@@ -882,7 +895,7 @@ return 0;
 }
 int str_ends_with(char* s, char c) {
 int len = strlen(s);
-if () {
+if ( == 0) {
 return 0;
 }
 if (s[ - 1] == c) {
