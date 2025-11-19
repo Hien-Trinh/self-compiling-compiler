@@ -21,7 +21,9 @@ class Parser:
             "ctos": "char*",
             "itos": "char*",
             "strlen": "int",
-            "strcmp": "int"
+            "strcmp": "int",
+            "read_file": "char*",
+            "write_file": "void"
         }
 
     # Returns kind of the next token
@@ -460,6 +462,14 @@ class Parser:
                     rhs_type, result = 'int', f'strcmp({result}, {rhs}) == 0'
                 elif op == '!=':
                     rhs_type, result = 'int', f'strcmp({result}, {rhs}) != 0'
+                else:
+                    raise TypeError(
+                        f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
+            elif (res_type == 'char*' and rhs_type == 'int') or \
+                 (res_type == 'int' and rhs_type == 'char*'):
+                if op == '==' or op == '!=':
+                    # Emit standard C pointer comparison: (ptr == 0)
+                    res_type, result = 'int', f'{result} {op} {rhs}'
                 else:
                     raise TypeError(
                         f'Operation \'{op}\' not allowed between \'{res_type}\' and \'{rhs_type}\', line {line_num}')
