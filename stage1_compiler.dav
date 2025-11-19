@@ -351,7 +351,6 @@ ah int let_stmt(int is_global) {
         next();
         if var_type == "int" { var_type = "int*"; }
         else if var_type == "char" { var_type = "char*"; }
-        else if var_type == "char*" { var_type = "char**"; }
         else { boo("Error: Cannot make array of type " + var_type); return -1; }
     }
 
