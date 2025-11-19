@@ -744,7 +744,7 @@ ah int relational() {
                  return -1;
             } else {
                 // Standard int/char
-                emit("("); emit(left_buf); emit(" "); emit(op); emit(" "); emit(rhs_code); emit(")");
+                emit(left_buf); emit(" "); emit(op); emit(" "); emit(rhs_code);
             }
             
             expr_type = "int";
@@ -897,7 +897,7 @@ ah int atom() {
     }
     else if tok_type == "STRING" {
         expr_type = "char*";
-        emit(token_pool + tok_val_idx);
+        emit("\""); emit(token_pool + tok_val_idx); emit("\"");
     }
     
     // Case 2: Parenthesized Expression

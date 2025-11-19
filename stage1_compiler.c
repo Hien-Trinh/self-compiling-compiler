@@ -351,8 +351,6 @@ int let_stmt(int is_global) {
             var_type = "int*";
         } else if (strcmp(var_type, "char") == 0) {
                  var_type = "char*";
-             } else if (strcmp(var_type, "char*") == 0) {
-                 var_type = "char**";
              } else {
                  printf("%s\n", concat("Error: Cannot make array of type ", var_type));
                  return -1;
@@ -726,13 +724,11 @@ int relational() {
                        return -1;
                    } else {
                        // Standard int/char
-                       emit("(");
                        emit(left_buf);
                        emit(" ");
                        emit(op);
                        emit(" ");
                        emit(rhs_code);
-                       emit(")");
                    }
             expr_type = "int";
             left_type = "int";
@@ -881,7 +877,9 @@ int atom() {
              emit(token_pool + tok_val_idx);
          } else if (strcmp(tok_type, "STRING") == 0) {
              expr_type = "char*";
+             emit("\"");
              emit(token_pool + tok_val_idx);
+             emit("\"");
          }
          // Case 2: Parenthesized Expression
          else if (strcmp(tok_type, "LPAREN") == 0) {
