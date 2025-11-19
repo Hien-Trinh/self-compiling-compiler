@@ -9,11 +9,11 @@
 // =============================================================
 
 // --- Tokenizer Storage ---
-beg char* token_types[1000];
-beg int token_values[1000]; // Stores index into token_pool, or -1
-beg int token_lines[1000];
-beg int token_cols[1000];
-beg char token_pool[50000]; // String pool for token values
+beg char* token_types[50000];
+beg int token_values[50000]; // Stores index into token_pool, or -1
+beg int token_lines[50000];
+beg int token_cols[50000];
+beg char token_pool[500000]; // String pool for token values
 beg int n_tokens = 0;      // Total number of tokens found
 
 // --- Parser State ---
@@ -27,17 +27,17 @@ beg char* expr_type;    // Type of the last parsed expression, works like a forg
 // The type strings will be string literals (e.g., "int", "char*").
 
 // Global Scope (self.env)
-beg char* global_names[100];
-beg char* global_types[100];
+beg char* global_names[1000];
+beg char* global_types[1000];
 beg int n_globals = 0;
 
 // Local Scope (self.variables)
-beg char* local_names[100];
-beg char* local_types[100];
+beg char* local_names[1000];
+beg char* local_types[1000];
 beg int n_locals = 0;
 
 // --- C Code Generation Buffer ---
-beg char c_code_buffer[100000]; // 100k buffer for generated C
+beg char c_code_buffer[1000000]; // 1MB buffer for generated C
 beg int c_code_pos = 0;         // Current position in the buffer
 
 // --- Peek Buffer ---
@@ -1093,6 +1093,13 @@ ah int emit(char* s) {
     // Appends a string 's' to the global c_code_buffer.
     beg int i = 0;
     beg int len = strlen(s);
+
+    // --- Bounds check ---
+    if (c_code_pos + len >= 1000000) {
+        boo("CRITICAL ERROR: C code output buffer overflow! Increase c_code_buffer size.");
+        return -1; // This will likely cascade errors, but it prints the warning.
+    }
+
     while i < len {
         c_code_buffer[c_code_pos] = s[i];
         c_code_pos = c_code_pos + 1;
@@ -1234,6 +1241,16 @@ ah int tokenize(char* source_code) {
         c = source_code[pos];
         col = pos - line_start;
         i = 0;
+
+        // --- Bounds check ---
+        if (token_count >= 50000) {
+             boo("CRITICAL ERROR: Too many tokens! Increase token array sizes.");
+             return 0;
+        }
+        if (pool_pos >= 499000) { // Leave some safety margin
+             boo("CRITICAL ERROR: String pool overflow! Increase token_pool size.");
+             return 0;
+        }
 
         // --- 1. Skip Whitespace ---
         if is_space(c) {

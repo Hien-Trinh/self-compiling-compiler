@@ -16,12 +16,12 @@ void write_file(char* path, char* content);
 // Global Storage
 // =============================================================
 // --- Tokenizer Storage ---
-char* token_types[1000];
-int token_values[1000];
+char* token_types[50000];
+int token_values[50000];
 // Stores index into token_pool, or -1
-int token_lines[1000];
-int token_cols[1000];
-char token_pool[50000];
+int token_lines[50000];
+int token_cols[50000];
+char token_pool[500000];
 // String pool for token values
 int n_tokens = 0;
 // Total number of tokens found
@@ -37,16 +37,16 @@ char* expr_type;
 // The Stage 0 compiler will get the name strings from the token_pool.
 // The type strings will be string literals (e.g., "int", "char*").
 // Global Scope (self.env)
-char* global_names[100];
-char* global_types[100];
+char* global_names[1000];
+char* global_types[1000];
 int n_globals = 0;
 // Local Scope (self.variables)
-char* local_names[100];
-char* local_types[100];
+char* local_names[1000];
+char* local_types[1000];
 int n_locals = 0;
 // --- C Code Generation Buffer ---
-char c_code_buffer[100000];
-// 100k buffer for generated C
+char c_code_buffer[1000000];
+// 1MB buffer for generated C
 int c_code_pos = 0;
 // Current position in the buffer
 // --- Peek Buffer ---
@@ -1070,6 +1070,12 @@ int emit(char* s) {
     // Appends a string 's' to the global c_code_buffer.
     int i = 0;
     int len = strlen(s);
+    // --- Bounds check ---
+    if ((c_code_pos + len >= 1000000)) {
+        printf("%s\n", "CRITICAL ERROR: C code output buffer overflow! Increase c_code_buffer size.");
+        return -1;
+        // This will likely cascade errors, but it prints the warning.
+    }
     while (i < len) {
         c_code_buffer[c_code_pos] = s[i];
         c_code_pos = c_code_pos + 1;
@@ -1203,7 +1209,18 @@ int tokenize(char* source_code) {
         c = source_code[pos];
         col = pos - line_start;
         i = 0;
+        // --- Bounds check ---
+        if ((token_count >= 50000)) {
+            printf("%s\n", "CRITICAL ERROR: Too many tokens! Increase token array sizes.");
+            return 0;
+        }
+        if ((pool_pos >= 499000)) {
+            // Leave some safety margin
+            printf("%s\n", "CRITICAL ERROR: String pool overflow! Increase token_pool size.");
+            return 0;
+        }
         // --- 1. Skip Whitespace ---
+
         if (is_space(c)) {
             if (c == '\n') {
                 line_num = line_num + 1;
