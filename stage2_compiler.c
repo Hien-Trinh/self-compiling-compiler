@@ -71,7 +71,7 @@ return 1;
 }
 char* input_file = argv[1];
 char* output_file = argv[2];
-char* code = read_file();
+char* code = read_file(input_file);
 if () {
 printf("%s\n", "Error: Could not read input file.");
 return 1;
@@ -82,7 +82,7 @@ preset_global_functions();
 n_tokens = tokenize(code);
 parse();
 c_helper();
-write_file(, c_code_buffer);
+write_file(output_file, c_code_buffer);
 return 0;
 }
 int parse() {
@@ -215,17 +215,20 @@ i = 0;
 while (i < n_params) {
 char* var_type = param_types[i];
 if (param_has_arrays_part[i] == 1) {
-if () {
+if (strcmp(var_type, "int") == 0) {
+var_type = "int*";
 }
-else if (strcmp(, "char") == 0) {
+else if (strcmp(var_type, "char") == 0) {
+var_type = "char*";
 }
-else if () {
+else if (strcmp(var_type, "char*") == 0) {
+var_type = "char**";
 }
 else {
-printf("%s\n", concat("Error: Cannot make array of type ", ));
+printf("%s\n", concat("Error: Cannot make array of type ", var_type));
 }
 }
-add_symbol(0, param_names[i], );
+add_symbol(0, param_names[i], var_type);
 i = i + 1;
 }
 while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
@@ -556,7 +559,7 @@ while (strcmp(peek(), "OR") == 0 || strcmp(peek(), "AND") == 0) {
 int op_idx = next();
 char* op = op_to_c_op(token_types[op_idx]);
 emit(" ");
-emit();
+emit(op);
 emit(" ");
 relational();
 char* right_type = expr_type;
@@ -588,14 +591,14 @@ int line = token_lines[op_idx];
 char* rhs_code = peek_code("additive");
 char* rhs_type = expr_type;
 if ((strcmp(left_type, "char*") == 0 && strcmp(rhs_type, "char*") == 0)) {
-if (()) {
+if ((strcmp(op, "==") == 0)) {
 emit("strcmp(");
 emit(left_buf);
 emit(", ");
 emit(rhs_code);
 emit(") == 0");
 }
-else if ((strcmp(, "!=") == 0)) {
+else if ((strcmp(op, "!=") == 0)) {
 emit("strcmp(");
 emit(left_buf);
 emit(", ");
@@ -603,7 +606,7 @@ emit(rhs_code);
 emit(") != 0");
 }
 else {
-printf("%s\n", concat("Error: Operator '", )concat("Error: Operator '", "' not allowed on strings, line ")"Error: Operator '" + itos(line));
+printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed on strings, line ")"Error: Operator '" + itos(line));
 return -1;
 }
 }
@@ -614,7 +617,7 @@ return -1;
 else {
 emit(left_buf);
 emit(" ");
-emit();
+emit(op);
 emit(" ");
 emit(rhs_code);
 }
@@ -648,7 +651,7 @@ char* right_type = expr_type;
 if (strcmp(left_type, "int") == 0 && strcmp(right_type, "int") == 0) {
 emit(left_buf);
 emit(" ");
-emit();
+emit(op);
 emit(" ");
 emit(right_code);
 expr_type = "int";
@@ -656,15 +659,15 @@ expr_type = "int";
 else if (str_ends_with(left_type, *) && strcmp(right_type, "int") == 0) {
 emit(left_buf);
 emit(" ");
-emit();
+emit(op);
 emit(" ");
 emit(right_code);
 expr_type = left_type;
 }
 else if (strcmp(left_type, "int") == 0 && str_ends_with(right_type, *)) {
-if () {
+if (strcmp(op, "+") == 0) {
 emit(left_buf);
-emit();
+emit(op);
 emit(right_code);
 expr_type = right_type;
 }
@@ -673,7 +676,7 @@ printf("%s\n", "Error: Cannot subtract a pointer from an integer, line " + itos(
 return -1;
 }
 }
-else if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0 && ) {
+else if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0 && strcmp(op, "+") == 0) {
 emit("concat(");
 emit(left_buf);
 emit(", ");
@@ -682,7 +685,7 @@ emit(")");
 expr_type = "char*";
 }
 else {
-printf("%s\n", concat("Error: Operator '", )concat("Error: Operator '", "' not allowed between '")concat("Error: Operator '", left_type)concat("Error: Operator '", "' and '")concat("Error: Operator '", right_type)concat("Error: Operator '", "', line ")"Error: Operator '" + itos(line));
+printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed between '")concat("Error: Operator '", left_type)concat("Error: Operator '", "' and '")concat("Error: Operator '", right_type)concat("Error: Operator '", "', line ")"Error: Operator '" + itos(line));
 return -1;
 }
 left_type = expr_type;
@@ -702,7 +705,7 @@ while (strcmp(peek(), "MUL") == 0 || strcmp(peek(), "DIV") == 0) {
 int op_idx = next();
 char* op = op_to_c_op(token_types[op_idx]);
 emit(" ");
-emit();
+emit(op);
 emit(" ");
 unary();
 char* right_type = expr_type;
@@ -735,27 +738,27 @@ int tok_idx = next();
 char* tok_type = token_types[tok_idx];
 int tok_val_idx = token_values[tok_idx];
 int tok_line = token_lines[tok_idx];
-if () {
+if (strcmp(tok_type, "NUMBER") == 0) {
 expr_type = "int";
 emit(token_pool + tok_val_idx);
 }
-else if (strcmp(, "CHAR") == 0) {
+else if (strcmp(tok_type, "CHAR") == 0) {
 expr_type = "char";
 emit(token_pool + tok_val_idx);
 }
-else if (strcmp(, "STRING") == 0) {
+else if (strcmp(tok_type, "STRING") == 0) {
 expr_type = "char*";
 emit(""");
 emit(token_pool + tok_val_idx);
 emit(""");
 }
-else if (strcmp(, "LPAREN") == 0) {
+else if (strcmp(tok_type, "LPAREN") == 0) {
 emit("(");
 expr();
 emit(")");
 expect("RPAREN");
 }
-else if (strcmp(, "ID") == 0) {
+else if (strcmp(tok_type, "ID") == 0) {
 char* var_name = token_pool + tok_val_idx;
 char* sym_type = get_symbol_type(0, var_name);
 if (strcmp(sym_type, "") == 0) {
@@ -800,6 +803,9 @@ expr_type = "int";
 else if (strcmp(sym_type, "char*") == 0) {
 expr_type = "char";
 }
+else if (strcmp(sym_type, "char**") == 0) {
+expr_type = "char*";
+}
 else {
 expr_type = "int";
 }
@@ -810,7 +816,7 @@ emit(var_name);
 }
 }
 else {
-printf("%s\n", concat("Error: Unexpected token in expression: ", )concat("Error: Unexpected token in expression: ", " on line ")"Error: Unexpected token in expression: " + itos(tok_line));
+printf("%s\n", concat("Error: Unexpected token in expression: ", tok_type)concat("Error: Unexpected token in expression: ", " on line ")"Error: Unexpected token in expression: " + itos(tok_line));
 return -1;
 }
 return 0;
@@ -842,7 +848,7 @@ char* get_symbol_type(int is_global, char* name) {
 int i = 0;
 if (is_global == 0) {
 while (i < n_locals) {
-if () {
+if (strcmp(local_names[i], name) == 0) {
 return local_types[i];
 }
 i = i + 1;
@@ -850,7 +856,7 @@ i = i + 1;
 }
 else {
 while (i < n_globals) {
-if () {
+if (strcmp(global_names[i], name) == 0) {
 return global_types[i];
 }
 i = i + 1;

@@ -940,6 +940,8 @@ int atom() {
                 expr_type = "int";
             } else if (strcmp(sym_type, "char*") == 0) {
                      expr_type = "char";
+                 } else if (strcmp(sym_type, "char**") == 0) {
+                     expr_type = "char*";
                  } else {
                      expr_type = "int";
                  }

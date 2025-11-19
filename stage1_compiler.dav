@@ -962,6 +962,7 @@ ah int atom() {
             // For now, we assume simple types.
             if sym_type == "int*" { expr_type = "int"; }
             else if sym_type == "char*" { expr_type = "char"; }
+            else if sym_type == "char**" { expr_type = "char*"; }
             else { expr_type = "int"; } // Default assumption
         }
         // Sub-case 3c: Simple Variable
