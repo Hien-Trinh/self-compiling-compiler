@@ -187,6 +187,15 @@ ah int fn_decl() {
         fn_type = token_pool + token_values[fn_type_idx];
     }
 
+    // --- Get Pointer ---
+    if peek() == "MUL" {
+        next();
+        if fn_type == "int" { fn_type = "int*"; }
+        else if fn_type == "char" { fn_type = "char*"; }
+        else if fn_type == "char*" { fn_type = "char**"; }
+        else { boo("Error: Cannot make array of type " + fn_type); return -1; }
+    }
+
     // --- Get Name ---
     beg int fn_name_idx = expect("ID");
     beg char* fn_name = token_pool + token_values[fn_name_idx];
@@ -218,6 +227,16 @@ ah int fn_decl() {
         if peek() == "TYPE" {
             beg int param_type_idx = next();
             param_type = token_pool + token_values[param_type_idx];
+        }
+
+
+        // Get param pointer
+        if peek() == "MUL" {
+            next();
+            if param_type == "int" { param_type = "int*"; }
+            else if param_type == "char" { param_type = "char*"; }
+            else if param_type == "char*" { param_type = "char**"; }
+            else { boo("Error: Cannot make array of type " + param_type); return -1; }
         }
 
         // Get param name
@@ -327,6 +346,15 @@ ah int let_stmt(int is_global) {
         var_type = token_pool + token_values[var_type_idx];
     }
 
+    // --- Get Pointer ---
+    if peek() == "MUL" {
+        next();
+        if var_type == "int" { var_type = "int*"; }
+        else if var_type == "char" { var_type = "char*"; }
+        else if var_type == "char*" { var_type = "char**"; }
+        else { boo("Error: Cannot make array of type " + var_type); return -1; }
+    }
+
     // --- Get Name ---
     beg int var_name_idx = expect("ID");
     beg char* var_name = token_pool + token_values[var_name_idx];
@@ -383,7 +411,7 @@ ah int let_stmt(int is_global) {
         if var_type == "int" { array_type = "int*"; }
         else if var_type == "char" { array_type = "char*"; }
         else if var_type == "char*" { array_type = "char**"; }
-        else { boo("Error: Cannot make array of type " + var_type); }
+        else { boo("Error: Cannot make array of type " + var_type); return -1; }
         add_symbol(is_global, var_name, array_type);
         
         // C code: e.g., "int arr[10];"

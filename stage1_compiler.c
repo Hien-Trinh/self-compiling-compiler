@@ -173,6 +173,21 @@ int fn_decl() {
         int fn_type_idx = next();
         fn_type = token_pool + token_values[fn_type_idx];
     }
+    // --- Get Pointer ---
+
+    if (strcmp(peek(), "MUL") == 0) {
+        next();
+        if (strcmp(fn_type, "int") == 0) {
+            fn_type = "int*";
+        } else if (strcmp(fn_type, "char") == 0) {
+                 fn_type = "char*";
+             } else if (strcmp(fn_type, "char*") == 0) {
+                 fn_type = "char**";
+             } else {
+                 printf("%s\n", concat("Error: Cannot make array of type ", fn_type));
+                 return -1;
+             }
+    }
     // --- Get Name ---
 
     int fn_name_idx = expect("ID");
@@ -203,6 +218,21 @@ int fn_decl() {
         if (strcmp(peek(), "TYPE") == 0) {
             int param_type_idx = next();
             param_type = token_pool + token_values[param_type_idx];
+        }
+        // Get param pointer
+
+        if (strcmp(peek(), "MUL") == 0) {
+            next();
+            if (strcmp(param_type, "int") == 0) {
+                param_type = "int*";
+            } else if (strcmp(param_type, "char") == 0) {
+                     param_type = "char*";
+                 } else if (strcmp(param_type, "char*") == 0) {
+                     param_type = "char**";
+                 } else {
+                     printf("%s\n", concat("Error: Cannot make array of type ", param_type));
+                     return -1;
+                 }
         }
         // Get param name
 
@@ -313,6 +343,21 @@ int let_stmt(int is_global) {
         int var_type_idx = next();
         var_type = token_pool + token_values[var_type_idx];
     }
+    // --- Get Pointer ---
+
+    if (strcmp(peek(), "MUL") == 0) {
+        next();
+        if (strcmp(var_type, "int") == 0) {
+            var_type = "int*";
+        } else if (strcmp(var_type, "char") == 0) {
+                 var_type = "char*";
+             } else if (strcmp(var_type, "char*") == 0) {
+                 var_type = "char**";
+             } else {
+                 printf("%s\n", concat("Error: Cannot make array of type ", var_type));
+                 return -1;
+             }
+    }
     // --- Get Name ---
 
     int var_name_idx = expect("ID");
@@ -369,6 +414,7 @@ int let_stmt(int is_global) {
                  array_type = "char**";
              } else {
                  printf("%s\n", concat("Error: Cannot make array of type ", var_type));
+                 return -1;
              }
              add_symbol(is_global, var_name, array_type);
              // C code: e.g., "int arr[10];"
