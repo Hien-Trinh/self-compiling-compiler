@@ -27,6 +27,7 @@ def main():
 
 C_INCLUDE = \
     "#include <stdio.h>\n" \
+    "#include <stdlib.h>\n" \
     "#include <string.h>\n" \
     "\n"
 
@@ -34,6 +35,8 @@ C_PROTOTYPE = \
     "char* concat(char* str1, char* str2);\n" \
     "char* itos(int x);\n" \
     "char* ctos(char c);\n" \
+    "char* read_file(char* path);\n" \
+    "void write_file(char* path, char* content);\n" \
     "\n"
 
 C_HELPERS = \
@@ -55,6 +58,28 @@ C_HELPERS = \
     "    buf[0] = c;\n" \
     "    buf[1] = '\\0';\n" \
     "    return buf;\n" \
+    "}\n" \
+    "\n" \
+    "char* read_file(char* path) {\n" \
+    "    FILE* f = fopen(path, \"rb\");\n" \
+    "    if (!f) return NULL;\n" \
+    "    fseek(f, 0, SEEK_END);\n" \
+    "    long len = ftell(f);\n" \
+    "    fseek(f, 0, SEEK_SET);\n" \
+    "    char* buf = malloc(len + 1);\n" \
+    "    if (buf) {\n" \
+    "        fread(buf, 1, len, f);\n" \
+    "        buf[len] = '\\0';\n" \
+    "    }\n" \
+    "    fclose(f);\n" \
+    "    return buf;\n" \
+    "}\n" \
+    "\n" \
+    "void write_file(char* path, char* content) {\n" \
+    "    FILE* f = fopen(path, \"w\");\n" \
+    "    if (!f) return;\n" \
+    "    fprintf(f, \"%s\", content);\n" \
+    "    fclose(f);\n" \
     "}\n" \
     "\n"
 
