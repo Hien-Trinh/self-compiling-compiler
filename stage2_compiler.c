@@ -64,20 +64,6 @@ int c_include();
 int c_prototype();
 int c_helper();
 int preset_global_functions();
-void print_global_symbols() {
-int i = 0;
-while (i < n_globals) {
-printf("%s\n", concat(global_names[i], " ")concat(global_names[i], global_types[i]));
-i = i + 1;
-}
-}
-void print_local_symbols() {
-int i = 0;
-while (i < n_locals) {
-printf("%s\n", concat(local_names[i], " ")concat(local_names[i], local_types[i]));
-i = i + 1;
-}
-}
 int main(int argc, char* argv[]) {
 if (argc != 3) {
 printf("%s\n", "Usage: compiler <input_file.dav> <output_file.c>");
@@ -216,14 +202,12 @@ expect("RPAREN");
 emit(")");
 if (strcmp(peek(), "SEMICOL") == 0) {
 next();
-emit(";
-");
+emit(";\n");
 return 0;
 }
 else if (strcmp(peek(), "LBRACE") == 0) {
 next();
-emit(" {
-");
+emit(" {\n");
 clear_local_symbols();
 i = 0;
 while (i < n_params) {
@@ -249,8 +233,7 @@ while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
 statement();
 }
 expect("RBRACE");
-emit("}
-");
+emit("}\n");
 return 0;
 }
 else {
@@ -319,8 +302,7 @@ emit(" ");
 emit(var_name);
 emit(" = ");
 expr();
-emit(";
-");
+emit(";\n");
 char* right_type = expr_type;
 if (strcmp(var_type, "undefined") == 0) {
 var_type = right_type;
@@ -363,8 +345,7 @@ emit(" ");
 emit(var_name);
 emit("[");
 emit(size);
-emit("];
-");
+emit("];\n");
 return 0;
 }
 else if (strcmp(peek(), "SEMICOL") == 0) {
@@ -377,8 +358,7 @@ add_symbol(is_global, var_name, var_type);
 emit(var_type);
 emit(" ");
 emit(var_name);
-emit(";
-");
+emit(";\n");
 return 0;
 }
 else {
@@ -394,21 +374,20 @@ expect("LPAREN");
 char* expr_code = peek_code("expr");
 char* type = expr_type;
 if (strcmp(type, "int") == 0) {
-emit("printf("%d\n", ");
+emit("printf(\"%d\\n\", ");
 }
 else if (strcmp(type, "char") == 0) {
-emit("printf("%c\n", ");
+emit("printf(\"%c\\n\", ");
 }
 else if (strcmp(type, "char*") == 0) {
-emit("printf("%s\n", ");
+emit("printf(\"%s\\n\", ");
 }
 else {
 printf("%s\n", concat("Error: Unprintable type '", type)concat("Error: Unprintable type '", "' on line ")concat("Error: Unprintable type '", itos(line_num)));
 return -1;
 }
 emit(expr_code);
-emit(");
-");
+emit(");\n");
 expect("RPAREN");
 expect("SEMICOL");
 return 0;
@@ -428,8 +407,7 @@ next();
 emit(var_name);
 emit(" = ");
 expr();
-emit(";
-");
+emit(";\n");
 right_type = expr_type;
 if (strcmp(var_type, right_type) != 0) {
 printf("%s\n", concat("Error: Incompatible ", right_type)concat("Error: Incompatible ", " to ")concat("Error: Incompatible ", var_type)concat("Error: Incompatible ", " conversion on line ")concat("Error: Incompatible ", itos(line_num)));
@@ -453,8 +431,7 @@ arg_count = arg_count + 1;
 }
 expect("RPAREN");
 expect("SEMICOL");
-emit(");
-");
+emit(");\n");
 return 0;
 }
 else if (strcmp(peek(), "LSQUARE") == 0) {
@@ -474,8 +451,7 @@ return -1;
 expect("RSQUARE");
 expect("ASSIGN");
 expr();
-emit(";
-");
+emit(";\n");
 right_type = expr_type;
 char* base_type = "int";
 if (strcmp(var_type, "int*") == 0) {
@@ -503,15 +479,13 @@ int if_stmt() {
 expect("IF");
 emit("if (");
 expr();
-emit(") {
-");
+emit(") {\n");
 expect("LBRACE");
 while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
 statement();
 }
 expect("RBRACE");
-emit("}
-");
+emit("}\n");
 if (strcmp(peek(), "ELSE") == 0) {
 next();
 emit("else ");
@@ -520,14 +494,12 @@ if_stmt();
 }
 else if (strcmp(peek(), "LBRACE") == 0) {
 next();
-emit("{
-");
+emit("{\n");
 while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
 statement();
 }
 expect("RBRACE");
-emit("}
-");
+emit("}\n");
 }
 else {
 int tok_line = token_lines[parser_pos];
@@ -541,15 +513,13 @@ int while_stmt() {
 expect("WHILE");
 emit("while (");
 expr();
-emit(") {
-");
+emit(") {\n");
 expect("LBRACE");
 while (strcmp(peek(), "RBRACE") != 0 && strcmp(peek(), "EOF") != 0) {
 statement();
 }
 expect("RBRACE");
-emit("}
-");
+emit("}\n");
 return 0;
 }
 int return_stmt() {
@@ -557,8 +527,7 @@ int line_num = token_lines[parser_pos];
 expect("RETURN");
 emit("return ");
 expr();
-emit(";
-");
+emit(";\n");
 char* ret_type = expr_type;
 expect("SEMICOL");
 if (strcmp(current_fn_ret_type, ret_type) != 0) {
@@ -779,9 +748,9 @@ emit(token_pool + tok_val_idx);
 }
 else if (strcmp(tok_type, "STRING") == 0) {
 expr_type = "char*";
-emit(""");
+emit("\"");
 emit(token_pool + tok_val_idx);
-emit(""");
+emit("\"");
 }
 else if (strcmp(tok_type, "LPAREN") == 0) {
 emit("(");
@@ -1018,98 +987,49 @@ c_code_pos = start_pos;
 return expr_peek_buffer;
 }
 int c_include() {
-emit("#include <stdio.h>
-");
-emit("#include <stdlib.h>
-");
-emit("#include <string.h>
-
-");
+emit("#include <stdio.h>\n");
+emit("#include <stdlib.h>\n");
+emit("#include <string.h>\n\n");
 return 0;
 }
 int c_prototype() {
-emit("char* concat(char* str1, char* str2);
-");
-emit("char* itos(int x);
-");
-emit("char* ctos(char c);
-
-");
-emit("char* read_file(char* path);
-");
-emit("void write_file(char* path, char* content);
-");
+emit("char* concat(char* str1, char* str2);\n");
+emit("char* itos(int x);\n");
+emit("char* ctos(char c);\n\n");
+emit("char* read_file(char* path);\n");
+emit("void write_file(char* path, char* content);\n");
 return 0;
 }
 int c_helper() {
-emit("
-char* concat(char* str1, char* str2) {
-");
-emit("static char buf[1024];
-");
-emit("snprintf(buf, sizeof(buf), "%s%s", str1, str2);
-");
-emit("return buf;
-}
-
-");
-emit("char* itos(int x) {
-");
-emit("static char buf[32];
-");
-emit("snprintf(buf, sizeof(buf), "%d", x);
-");
-emit("return buf;
-}
-
-");
-emit("char* ctos(char c) {
-");
-emit("static char buf[2];
-");
-emit("buf[0] = c;
-");
-emit("buf[1] = '\0';
-");
-emit("return buf;
-}
-
-");
-emit("char* read_file(char* path) {
-");
-emit("FILE* f = fopen(path, "rb");
-");
-emit("if (!f) return NULL;
-");
-emit("fseek(f, 0, SEEK_END);
-");
-emit("long len = ftell(f);
-");
-emit("fseek(f, 0, SEEK_SET);
-");
-emit("char* buf = malloc(len + 1);
-");
-emit("fread(buf, 1, len, f);
-");
-emit("buf[len] = '\0';
-");
-emit("fclose(f);
-");
-emit("return buf;
-}
-
-");
-emit("void write_file(char* path, char* content) {
-");
-emit("FILE* f = fopen(path, "w");
-");
-emit("if (!f) return;
-");
-emit("fprintf(f, "%s", content);
-");
-emit("fclose(f);
-}
-");
+emit("\nchar* concat(char* str1, char* str2) {\n");
+emit("static char buf[1024];\n");
+emit("snprintf(buf, sizeof(buf), \"%s%s\", str1, str2);\n");
+emit("return buf;\n}\n\n");
+emit("char* itos(int x) {\n");
+emit("static char buf[32];\n");
+emit("snprintf(buf, sizeof(buf), \"%d\", x);\n");
+emit("return buf;\n}\n\n");
+emit("char* ctos(char c) {\n");
+emit("static char buf[2];\n");
+emit("buf[0] = c;\n");
+emit("buf[1] = '\\0';\n");
+emit("return buf;\n}\n\n");
+emit("char* read_file(char* path) {\n");
+emit("FILE* f = fopen(path, \"rb\");\n");
+emit("if (!f) return NULL;\n");
+emit("fseek(f, 0, SEEK_END);\n");
+emit("long len = ftell(f);\n");
+emit("fseek(f, 0, SEEK_SET);\n");
+emit("char* buf = malloc(len + 1);\n");
+emit("fread(buf, 1, len, f);\n");
+emit("buf[len] = '\\0';\n");
+emit("fclose(f);\n");
+emit("return buf;\n}\n\n");
+emit("void write_file(char* path, char* content) {\n");
+emit("FILE* f = fopen(path, \"w\");\n");
+emit("if (!f) return;\n");
+emit("fprintf(f, \"%s\", content);\n");
+emit("fclose(f);\n}\n");
 return 0;
 }
 int preset_global_functions() {
@@ -1341,14 +1261,15 @@ pos = pos + 1;
 c = source_code[pos];
 while (c != " && c != 0) {
 if (c == \) {
+buffer[i] = \;
+i = i + 1;
 pos = pos + 1;
 c = source_code[pos];
 if (c == n) {
-buffer[i] = 
-;
+buffer[i] = n;
 }
 else if (c == t) {
-buffer[i] = 	;
+buffer[i] = t;
 }
 else if (c == ") {
 buffer[i] = ";

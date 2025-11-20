@@ -95,22 +95,6 @@ int c_include();
 int c_prototype();
 int c_helper();
 int preset_global_functions();
-void print_global_symbols() {
-    int i = 0;
-    while (i < n_globals) {
-        printf("%s\n", concat(concat(global_names[i], " "), global_types[i]));
-        i = i + 1;
-    }
-}
-
-void print_local_symbols() {
-    int i = 0;
-    while (i < n_locals) {
-        printf("%s\n", concat(concat(local_names[i], " "), local_types[i]));
-        i = i + 1;
-    }
-}
-
 // =============================================================
 // Main Entry Point
 // =============================================================
@@ -1478,12 +1462,14 @@ int tokenize(char* source_code) {
                  c = source_code[pos];
                  while (c != '"' && c != '\0') {
                 if (c == '\\') {
+                    buffer[i] = '\\';
+                    i = i + 1;
                     pos = pos + 1;
                     c = source_code[pos];
                     if (c == 'n') {
-                        buffer[i] = '\n';
+                        buffer[i] = 'n';
                     } else if (c == 't') {
-                               buffer[i] = '\t';
+                               buffer[i] = 't';
                            } else if (c == '"') {
                                buffer[i] = '"';
                            } else if (c == '\\') {

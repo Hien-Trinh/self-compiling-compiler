@@ -1467,10 +1467,12 @@ ah int tokenize(char* source_code) {
 
             while c != '"' && c != '\0' {
                 if c == '\\' {
+                    buffer[i] = '\\';
+                    i = i + 1;
                     pos = pos + 1; c = source_code[pos];
                     
-                    if c == 'n' { buffer[i] = '\n';
-                    } else if c == 't' { buffer[i] = '\t';
+                    if c == 'n' { buffer[i] = 'n';
+                    } else if c == 't' { buffer[i] = 't';
                     } else if c == '"' { buffer[i] = '"';
                     } else if c == '\\' { buffer[i] = '\\';
                     } else { buffer[i] = c; }
