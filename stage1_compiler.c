@@ -103,6 +103,14 @@ void print_global_symbols() {
     }
 }
 
+void print_local_symbols() {
+    int i = 0;
+    while (i < n_locals) {
+        printf("%s\n", concat(concat(local_names[i], " "), local_types[i]));
+        i = i + 1;
+    }
+}
+
 // =============================================================
 // Main Entry Point
 // =============================================================
@@ -383,10 +391,8 @@ int let_stmt(int is_global) {
         emit(" ");
         emit(var_name);
         emit(" = ");
-        // expr(); // This emits the C code for the RHS
-        char* code = peek_code("expr");
-        // boo(code + " " + expr_type);
-        emit(code);
+        expr();
+        // This emits the C code for the RHS
         emit(";\n");
         char* right_type = expr_type;
         // TODO: inference not working, come back to fix me please
@@ -568,6 +574,8 @@ int id_stmt() {
             base_type = "int";
         } else if (strcmp(var_type, "char*") == 0) {
                  base_type = "char";
+             } else if (strcmp(var_type, "char**") == 0) {
+                 base_type = "char*";
              }
              if (strcmp(base_type, right_type) != 0) {
             printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible types: cannot assign ", right_type), " to array element of type "), base_type), ", line "), itos(line_num)));

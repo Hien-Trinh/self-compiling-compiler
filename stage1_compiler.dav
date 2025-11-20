@@ -104,6 +104,14 @@ ah void print_global_symbols() {
     }
 }
 
+ah void print_local_symbols() {
+    beg int i = 0;
+    while i < n_locals {
+        boo(local_names[i] + " " + local_types[i]);
+        i = i + 1;
+    }
+}
+
 
 // =============================================================
 // Main Entry Point
@@ -420,6 +428,7 @@ ah int let_stmt(int is_global) {
         else if var_type == "char" { array_type = "char*"; }
         else if var_type == "char*" { array_type = "char**"; }
         else { boo("Error: Cannot make array of type " + var_type); return -1; }
+
         add_symbol(is_global, var_name, array_type);
         
         // C code: e.g., "int arr[10];"
@@ -571,6 +580,7 @@ ah int id_stmt() {
         beg char* base_type = "int"; // Default to int
         if var_type == "int*" { base_type = "int"; }
         else if var_type == "char*" { base_type = "char"; }
+        else if var_type == "char**" { base_type = "char*"; }
 
         if base_type != right_type {
             boo("Error: Incompatible types: cannot assign " + right_type + " to array element of type " + base_type + ", line " + itos(line_num));

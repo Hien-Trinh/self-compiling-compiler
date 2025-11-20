@@ -71,6 +71,13 @@ printf("%s\n", concat(global_names[i], " ")concat(global_names[i], global_types[
 i = i + 1;
 }
 }
+void print_local_symbols() {
+int i = 0;
+while (i < n_locals) {
+printf("%s\n", concat(local_names[i], " ")concat(local_names[i], local_types[i]));
+i = i + 1;
+}
+}
 int main(int argc, char* argv[]) {
 if (argc != 3) {
 printf("%s\n", "Usage: compiler <input_file.dav> <output_file.c>");
@@ -311,8 +318,7 @@ emit(var_type);
 emit(" ");
 emit(var_name);
 emit(" = ");
-char* code = peek_code("expr");
-emit(code);
+expr();
 emit(";
 ");
 char* right_type = expr_type;
@@ -476,6 +482,9 @@ base_type = "int";
 }
 else if (strcmp(var_type, "char*") == 0) {
 base_type = "char";
+}
+else if (strcmp(var_type, "char**") == 0) {
+base_type = "char*";
 }
 if (strcmp(base_type, right_type) != 0) {
 printf("%s\n", concat("Error: Incompatible types: cannot assign ", right_type)concat("Error: Incompatible types: cannot assign ", " to array element of type ")concat("Error: Incompatible types: cannot assign ", base_type)concat("Error: Incompatible types: cannot assign ", ", line ")concat("Error: Incompatible types: cannot assign ", itos(line_num)));
