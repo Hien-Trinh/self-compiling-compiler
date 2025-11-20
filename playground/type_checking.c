@@ -17,6 +17,10 @@ int main() {
   char* param_list = "";
   char* body = "printf(\"\%d\\n\", global_var);";
   printf("%s\n", concat(concat(concat(concat(concat(concat(concat(fn_type, " "), fn_name), "("), param_list), ") {\n"), body), "\n}"));
+  int a;
+  int b;
+  int c;
+  a == b == c;
   return 0;
 }
 

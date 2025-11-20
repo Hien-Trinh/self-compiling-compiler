@@ -665,7 +665,7 @@ int logical() {
         emit(" ");
         emit(op);
         emit(" ");
-        relational();
+        logical();
         // Emits right side
         char* right_type = expr_type;
         // Type check: logical ops must be on ints (or chars)
@@ -701,7 +701,7 @@ int relational() {
             char* op = op_to_c_op(token_types[op_idx]);
             int line = token_lines[op_idx];
             // 2. Peek RHS
-            char* right_code = peek_code("additive");
+            char* right_code = peek_code("relational");
             char* right_type = expr_type;
             // 3. Generate Code
             if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0) {
@@ -764,7 +764,7 @@ int additive() {
     // Need local copy because peek_code buffer will be overwritten
     char left_buf[2048];
     int i = 0;
-    while ((left_ptr[i] != '\0')) {
+    while (left_ptr[i] != '\0') {
         left_buf[i] = left_ptr[i];
         i = i + 1;
     }
@@ -775,7 +775,7 @@ int additive() {
             char* op = op_to_c_op(token_types[op_idx]);
             int line = token_lines[op_idx];
             // 2. Peek RHS
-            char* right_code = peek_code("multiplicative");
+            char* right_code = peek_code("additive");
             char* right_type = expr_type;
             // 3. Generate Code
             // Case 1: int + int
@@ -887,7 +887,9 @@ int atom() {
         emit(token_pool + tok_val_idx);
     } else if (strcmp(tok_type, "CHAR") == 0) {
              expr_type = "char";
+             emit("'");
              emit(token_pool + tok_val_idx);
+             emit("'");
          } else if (strcmp(tok_type, "STRING") == 0) {
              expr_type = "char*";
              emit("\"");
@@ -1147,19 +1149,19 @@ int emit(char* s) {
 
 char* peek_code(char* level) {
     int start_pos = c_code_pos;
-    if ((strcmp(level, "expr") == 0)) {
+    if (strcmp(level, "expr") == 0) {
         expr();
-    } else if ((strcmp(level, "logical") == 0)) {
+    } else if (strcmp(level, "logical") == 0) {
              logical();
-         } else if ((strcmp(level, "relational") == 0)) {
+         } else if (strcmp(level, "relational") == 0) {
              relational();
-         } else if ((strcmp(level, "additive") == 0)) {
+         } else if (strcmp(level, "additive") == 0) {
              additive();
-         } else if ((strcmp(level, "multiplicative") == 0)) {
+         } else if (strcmp(level, "multiplicative") == 0) {
              multiplicative();
-         } else if ((strcmp(level, "unary") == 0)) {
+         } else if (strcmp(level, "unary") == 0) {
              unary();
-         } else if ((strcmp(level, "atom") == 0)) {
+         } else if (strcmp(level, "atom") == 0) {
              atom();
          } else {
              printf("%s\n", concat("Error: Unknown peek level: ", level));
@@ -1508,13 +1510,17 @@ int tokenize(char* source_code) {
                  pos = pos + 1;
                  c = source_code[pos];
                  token_val = c;
+                 int is_escape = 0;
                  if (c == '\\') {
+                token_pool[pool_pos] = '\\';
+                pool_pos = pool_pos + 1;
+                is_escape = 1;
                 pos = pos + 1;
                 c = source_code[pos];
                 if (c == 'n') {
-                    token_val = '\n';
+                    token_val = 'n';
                 } else if (c == 't') {
-                           token_val = '\t';
+                           token_val = 't';
                        } else if (c == '\'') {
                            token_val = '\'';
                        } else if (c == '\\') {
@@ -1536,7 +1542,7 @@ int tokenize(char* source_code) {
                  token_types[token_count] = "CHAR";
                  token_lines[token_count] = line_num;
                  token_cols[token_count] = token_start_col;
-                 token_values[token_count] = pool_pos;
+                 token_values[token_count] = pool_pos - is_escape;
                  token_pool[pool_pos] = buffer[0];
                  token_pool[pool_pos + 1] = buffer[1];
                  pool_pos = pool_pos + 2;

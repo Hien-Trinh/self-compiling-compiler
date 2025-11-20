@@ -682,7 +682,7 @@ ah int logical() {
 
         emit(" "); emit(op); emit(" ");
 
-        relational(); // Emits right side
+        logical(); // Emits right side
         beg char* right_type = expr_type;
 
         // Type check: logical ops must be on ints (or chars)
@@ -728,7 +728,7 @@ ah int relational() {
             beg int line = token_lines[op_idx];
 
             // 2. Peek RHS
-            beg char* right_code = peek_code("additive");
+            beg char* right_code = peek_code("relational");
             beg char* right_type = expr_type;
 
             // 3. Generate Code
@@ -780,7 +780,7 @@ ah int additive() {
     // Need local copy because peek_code buffer will be overwritten
     beg char left_buf[2048];
     beg int i = 0;
-    while (left_ptr[i] != '\0') {
+    while left_ptr[i] != '\0' {
         left_buf[i] = left_ptr[i];
         i = i + 1;
     }
@@ -793,7 +793,7 @@ ah int additive() {
             beg int line = token_lines[op_idx];
 
             // 2. Peek RHS
-            beg char* right_code = peek_code("multiplicative");
+            beg char* right_code = peek_code("additive");
             beg char* right_type = expr_type;
 
             // 3. Generate Code
@@ -903,7 +903,7 @@ ah int atom() {
     }
     else if tok_type == "CHAR" {
         expr_type = "char";
-        emit(token_pool + tok_val_idx);
+        emit("'"); emit(token_pool + tok_val_idx); emit("'");
     }
     else if tok_type == "STRING" {
         expr_type = "char*";
@@ -1150,13 +1150,13 @@ ah int emit(char* s) {
 ah char* peek_code(char* level) {
     beg int start_pos = c_code_pos;
     
-    if (level == "expr") { expr(); }
-    else if (level == "logical") { logical(); }
-    else if (level == "relational") { relational(); }
-    else if (level == "additive") { additive(); }
-    else if (level == "multiplicative") { multiplicative(); }
-    else if (level == "unary") { unary(); }
-    else if (level == "atom") { atom(); }
+    if level == "expr" { expr(); }
+    else if level == "logical" { logical(); }
+    else if level == "relational" { relational(); }
+    else if level == "additive" { additive(); }
+    else if level == "multiplicative" { multiplicative(); }
+    else if level == "unary" { unary(); }
+    else if level == "atom" { atom(); }
     else {
         boo("Error: Unknown peek level: " + level);
         return "";
@@ -1503,12 +1503,16 @@ ah int tokenize(char* source_code) {
             token_start_col = col;
             pos = pos + 1; c = source_code[pos];
             token_val = c;
+            beg int is_escape = 0;
 
             if c == '\\' {
+                token_pool[pool_pos] = '\\';
+                pool_pos = pool_pos + 1;
+                is_escape = 1;
                 pos = pos + 1; c = source_code[pos];
 
-                if c == 'n' { token_val = '\n';
-                } else if c == 't' { token_val = '\t';
+                if c == 'n' { token_val = 'n';
+                } else if c == 't' { token_val = 't';
                 } else if c == '\'' { token_val = '\'';
                 } else if c == '\\' { token_val = '\\';
                 } else { token_val = c; }
@@ -1523,7 +1527,7 @@ ah int tokenize(char* source_code) {
             token_types[token_count] = "CHAR";
             token_lines[token_count] = line_num;
             token_cols[token_count] = token_start_col;
-            token_values[token_count] = pool_pos;
+            token_values[token_count] = pool_pos - is_escape;
             token_pool[pool_pos] = buffer[0];
             token_pool[pool_pos + 1] = buffer[1];
             pool_pos = pool_pos + 2;
