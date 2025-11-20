@@ -378,7 +378,7 @@ int let_stmt(int is_global) {
     char* var_name = token_pool + token_values[var_name_idx];
     // Check redefinition
     if ((is_global == 0 && strcmp(get_symbol_type(0, var_name), "") != 0) || (is_global == 1 && strcmp(get_symbol_type(1, var_name), "") != 0)) {
-        printf("%s\n", concat(concat(concat("Error: Redefinition of variable", var_name), ", line "), itos(line_num)));
+        printf("%s\n", concat(concat(concat("Error: Redefinition of variable ", var_name), ", line "), itos(line_num)));
         return -1;
         // Error
     }

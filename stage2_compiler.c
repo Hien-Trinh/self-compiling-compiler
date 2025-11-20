@@ -309,7 +309,7 @@ return -1;
 int var_name_idx = expect("ID");
 char* var_name = token_pool + token_values[var_name_idx];
 if ((is_global == 0 && strcmp(get_symbol_type(0, var_name), "") != 0) || (is_global == 1 && strcmp(get_symbol_type(1, var_name), "") != 0)) {
-printf("%s\n", concat("Error: Redefinition of variable", var_name)concat("Error: Redefinition of variable", ", line ")concat("Error: Redefinition of variable", itos(line_num)));
+printf("%s\n", concat("Error: Redefinition of variable ", var_name)concat("Error: Redefinition of variable ", ", line ")concat("Error: Redefinition of variable ", itos(line_num)));
 return -1;
 }
 if (strcmp(peek(), "ASSIGN") == 0) {
@@ -430,6 +430,7 @@ emit(" = ");
 expr();
 emit(";
 ");
+right_type = expr_type;
 if (strcmp(var_type, right_type) != 0) {
 printf("%s\n", concat("Error: Incompatible ", right_type)concat("Error: Incompatible ", " to ")concat("Error: Incompatible ", var_type)concat("Error: Incompatible ", " conversion on line ")concat("Error: Incompatible ", itos(line_num)));
 return -1;
