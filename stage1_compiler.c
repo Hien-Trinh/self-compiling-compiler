@@ -95,6 +95,14 @@ int c_include();
 int c_prototype();
 int c_helper();
 int preset_global_functions();
+void print_global_symbols() {
+    int i = 0;
+    while (i < n_globals) {
+        printf("%s\n", concat(concat(global_names[i], " "), global_types[i]));
+        i = i + 1;
+    }
+}
+
 // =============================================================
 // Main Entry Point
 // =============================================================
@@ -118,7 +126,7 @@ int main(int argc, char* argv[]) {
     c_prototype();
     preset_global_functions();
     // 3. Tokenize
-    n_tokens = tokenize(code);
+    tokenize(code);
     // 4. Parse
     parse();
     // 5. Emit Helpers
@@ -375,8 +383,10 @@ int let_stmt(int is_global) {
         emit(" ");
         emit(var_name);
         emit(" = ");
-        expr();
-        // This emits the C code for the RHS
+        // expr(); // This emits the C code for the RHS
+        char* code = peek_code("expr");
+        // boo(code + " " + expr_type);
+        emit(code);
         emit(";\n");
         char* right_type = expr_type;
         // TODO: inference not working, come back to fix me please
@@ -453,11 +463,11 @@ int print_stmt() {
     char* expr_code = peek_code("expr");
     char* type = expr_type;
     // peek_code sets this global
-    if ((strcmp(type, "int") == 0)) {
+    if (strcmp(type, "int") == 0) {
         emit("printf(\"%d\\n\", ");
-    } else if ((strcmp(type, "char") == 0)) {
+    } else if (strcmp(type, "char") == 0) {
                emit("printf(\"%c\\n\", ");
-           } else if ((strcmp(type, "char*") == 0)) {
+           } else if (strcmp(type, "char*") == 0) {
                emit("printf(\"%s\\n\", ");
            } else {
                printf("%s\n", concat(concat(concat("Error: Unprintable type '", type), "' on line "), itos(line_num)));
@@ -912,8 +922,6 @@ int atom() {
 
              if (strcmp(peek(), "LPAREN") == 0) {
             next();
-            expr_type = sym_type;
-            // Type is the function's return type
             emit(var_name);
             emit("(");
             int arg_count = 0;
@@ -925,6 +933,8 @@ int atom() {
                 expr();
                 arg_count = arg_count + 1;
             }
+            expr_type = sym_type;
+            // Type is the function's return type
             expect("RPAREN");
             emit(")");
         }
@@ -1128,7 +1138,7 @@ int emit(char* s) {
     int i = 0;
     int len = strlen(s);
     // --- Bounds check ---
-    if ((c_code_pos + len >= 1000000)) {
+    if (c_code_pos + len >= 1000000) {
         printf("%s\n", "CRITICAL ERROR: C code output buffer overflow! Increase c_code_buffer size.");
         return -1;
         // This will likely cascade errors, but it prints the warning.
@@ -1165,12 +1175,12 @@ char* peek_code(char* level) {
          }
     int end_pos = c_code_pos;
     int len = end_pos - start_pos;
-    if ((len >= 4096)) {
+    if (len >= 4096) {
         printf("%s\n", "Error: Expression too complex to peek (max 4096 chars).");
         return "";
     }
     int i = 0;
-    while ((i < len)) {
+    while (i < len) {
         expr_peek_buffer[i] = c_code_buffer[start_pos + i];
         i = i + 1;
     }
@@ -1267,11 +1277,11 @@ int tokenize(char* source_code) {
         col = pos - line_start;
         i = 0;
         // --- Bounds check ---
-        if ((token_count >= 50000)) {
+        if (token_count >= 50000) {
             printf("%s\n", "CRITICAL ERROR: Too many tokens! Increase token array sizes.");
             return 0;
         }
-        if ((pool_pos >= 499000)) {
+        if (pool_pos >= 499000) {
             // Leave some safety margin
             printf("%s\n", "CRITICAL ERROR: String pool overflow! Increase token_pool size.");
             return 0;
@@ -1493,7 +1503,7 @@ int tokenize(char* source_code) {
                  token_cols[token_count] = token_start_col;
                  token_values[token_count] = pool_pos;
                  j = 0;
-                 while ((j <= i)) {
+                 while (j <= i) {
                 token_pool[pool_pos] = buffer[j];
                 pool_pos = pool_pos + 1;
                 j = j + 1;
@@ -1540,15 +1550,15 @@ int tokenize(char* source_code) {
              }
              // --- 7. Handle Errors ---
              else {
-                 printf("%s\n", "Error: Unexpected character!");
-                 printf("%s\n", ctos(c));
+                 printf("%s\n", concat("Error: Unexpected character!", ctos(c)));
                  return 1;
              }
     }
     // Add EOF Token
     add_simple_token(token_count, "EOF", line_num, col);
     token_count = token_count + 1;
-    return token_count;
+    n_tokens = token_count;
+    return 0;
 }
 
 // =============================================================
@@ -1565,7 +1575,7 @@ int is_letter(char c) {
 int is_digit(char c) {
     // Checks if a character is a 0-9 digit.
     // Corresponds to: \d
-    return (c >= '0' && c <= '9');
+    return c >= '0' && c <= '9';
 }
 
 int is_space(char c) {

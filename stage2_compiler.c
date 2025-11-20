@@ -64,6 +64,13 @@ int c_include();
 int c_prototype();
 int c_helper();
 int preset_global_functions();
+void print_global_symbols() {
+int i = 0;
+while (i < n_globals) {
+printf("%s\n", concat(global_names[i], " ")concat(global_names[i], global_types[i]));
+i = i + 1;
+}
+}
 int main(int argc, char* argv[]) {
 if (argc != 3) {
 printf("%s\n", "Usage: compiler <input_file.dav> <output_file.c>");
@@ -79,7 +86,7 @@ return 1;
 c_include();
 c_prototype();
 preset_global_functions();
-n_tokens = tokenize(code);
+tokenize(code);
 parse();
 c_helper();
 write_file(output_file, c_code_buffer);
@@ -101,7 +108,7 @@ let_stmt(1);
 }
 else {
 int tok_line = token_lines[parser_pos];
-printf("%s\n", "Error: Unexpected global token on line " + itos(tok_line));
+printf("%s\n", concat("Error: Unexpected global token on line ", itos(tok_line)));
 printf("%s\n", concat("Expected FN, LET, or COMMENT, but got: ", tok));
 next();
 return -1;
@@ -110,7 +117,7 @@ return 0;
 }
 int fn_decl() {
 int fn_tok_idx = expect("FN");
-int line_num = token_lines[;
+int line_num = token_lines[fn_tok_idx];
 char* fn_type = "void";
 if (strcmp(peek(), "TYPE") == 0) {
 int fn_type_idx = next();
@@ -133,7 +140,7 @@ return -1;
 }
 }
 int fn_name_idx = expect("ID");
-char* fn_name = concat(token_pool, token_values[);
+char* fn_name = token_pool + token_values[fn_name_idx];
 current_fn_ret_type = fn_type;
 add_symbol(1, fn_name, fn_type);
 expect("LPAREN");
@@ -173,7 +180,7 @@ return -1;
 }
 }
 int param_name_idx = expect("ID");
-char* param_name = concat(token_pool, token_values[);
+char* param_name = token_pool + token_values[param_name_idx];
 emit(param_type);
 emit(" ");
 emit(param_name);
@@ -240,7 +247,7 @@ emit("}
 return 0;
 }
 else {
-printf("%s\n", concat("Error: Expected ';' or '{' after function signature, line ", itos()));
+printf("%s\n", concat("Error: Expected ';' or '{' after function signature, line ", itos(line_num)));
 return -1;
 }
 }
@@ -265,7 +272,7 @@ else if (strcmp(tok, "ID") == 0) {
 id_stmt();
 }
 else {
-printf("%s\n", concat("Error: Unexpected statement: ", tok)concat("Error: Unexpected statement: ", " on line ")"Error: Unexpected statement: " + itos(token_lines[parser_pos]));
+printf("%s\n", concat("Error: Unexpected statement: ", tok)concat("Error: Unexpected statement: ", " on line ")concat("Error: Unexpected statement: ", itos(token_lines[parser_pos])));
 next();
 return -1;
 }
@@ -293,9 +300,9 @@ return -1;
 }
 }
 int var_name_idx = expect("ID");
-char* var_name = concat(token_pool, token_values[);
+char* var_name = token_pool + token_values[var_name_idx];
 if ((is_global == 0 && strcmp(get_symbol_type(0, var_name), "") != 0) || (is_global == 1 && strcmp(get_symbol_type(1, var_name), "") != 0)) {
-printf("%s\n", concat("Error: Redefinition of variable", var_name)concat("Error: Redefinition of variable", ", line ")"Error: Redefinition of variable" + itos(line_num));
+printf("%s\n", concat("Error: Redefinition of variable", var_name)concat("Error: Redefinition of variable", ", line ")concat("Error: Redefinition of variable", itos(line_num)));
 return -1;
 }
 if (strcmp(peek(), "ASSIGN") == 0) {
@@ -304,7 +311,8 @@ emit(var_type);
 emit(" ");
 emit(var_name);
 emit(" = ");
-expr();
+char* code = peek_code("expr");
+emit(code);
 emit(";
 ");
 char* right_type = expr_type;
@@ -312,7 +320,7 @@ if (strcmp(var_type, "undefined") == 0) {
 var_type = right_type;
 }
 else if (strcmp(var_type, right_type) != 0) {
-printf("%s\n", concat("Error: Incompatible type ", right_type)concat("Error: Incompatible type ", " to ")concat("Error: Incompatible type ", var_type)concat("Error: Incompatible type ", ", line ")"Error: Incompatible type " + itos(line_num));
+printf("%s\n", concat("Error: Incompatible type ", right_type)concat("Error: Incompatible type ", " to ")concat("Error: Incompatible type ", var_type)concat("Error: Incompatible type ", ", line ")concat("Error: Incompatible type ", itos(line_num)));
 return -1;
 }
 expect("SEMICOL");
@@ -322,11 +330,11 @@ return 0;
 else if (strcmp(peek(), "LSQUARE") == 0) {
 next();
 if (strcmp(var_type, "undefined") == 0) {
-printf("%s\n", "Error: Array declaration must have an explicit type on line" + itos(line_num));
+printf("%s\n", concat("Error: Array declaration must have an explicit type on line", itos(line_num)));
 return -1;
 }
 int size_tok = expect("NUMBER");
-char* size = concat(token_pool, token_values[);
+char* size = token_pool + token_values[size_tok];
 expect("RSQUARE");
 expect("SEMICOL");
 char* array_type = "int*";
@@ -356,7 +364,7 @@ return 0;
 else if (strcmp(peek(), "SEMICOL") == 0) {
 next();
 if (strcmp(var_type, "undefined") == 0) {
-printf("%s\n", "Error: Declaration without assignment must have explicit type on line" + itos(line_num));
+printf("%s\n", concat("Error: Declaration without assignment must have explicit type on line", itos(line_num)));
 return -1;
 }
 add_symbol(is_global, var_name, var_type);
@@ -368,7 +376,7 @@ emit(";
 return 0;
 }
 else {
-printf("%s\n", "Error: Expected '=', '[', or ';' after variable name on line" + itos(line_num));
+printf("%s\n", concat("Error: Expected '=', '[', or ';' after variable name on line", itos(line_num)));
 next();
 return -1;
 }
@@ -379,17 +387,17 @@ expect("PRINT");
 expect("LPAREN");
 char* expr_code = peek_code("expr");
 char* type = expr_type;
-if ((strcmp(type, "int") == 0)) {
+if (strcmp(type, "int") == 0) {
 emit("printf("%d\n", ");
 }
-else if ((strcmp(type, "char") == 0)) {
+else if (strcmp(type, "char") == 0) {
 emit("printf("%c\n", ");
 }
-else if ((strcmp(type, "char*") == 0)) {
+else if (strcmp(type, "char*") == 0) {
 emit("printf("%s\n", ");
 }
 else {
-printf("%s\n", concat("Error: Unprintable type '", type)concat("Error: Unprintable type '", "' on line ")"Error: Unprintable type '" + itos(line_num));
+printf("%s\n", concat("Error: Unprintable type '", type)concat("Error: Unprintable type '", "' on line ")concat("Error: Unprintable type '", itos(line_num)));
 return -1;
 }
 emit(expr_code);
@@ -406,7 +414,7 @@ char* var_name = token_pool + token_values[tok_idx];
 char* var_type = get_symbol_type(0, var_name);
 char* right_type;
 if (strcmp(var_type, "") == 0) {
-printf("%s\n", concat("Error: Undeclared identifier '", var_name)concat("Error: Undeclared identifier '", "' on line ")"Error: Undeclared identifier '" + itos(line_num));
+printf("%s\n", concat("Error: Undeclared identifier '", var_name)concat("Error: Undeclared identifier '", "' on line ")concat("Error: Undeclared identifier '", itos(line_num)));
 return -1;
 }
 if (strcmp(peek(), "ASSIGN") == 0) {
@@ -417,7 +425,7 @@ expr();
 emit(";
 ");
 if (strcmp(var_type, right_type) != 0) {
-printf("%s\n", concat("Error: Incompatible ", right_type)concat("Error: Incompatible ", " to ")concat("Error: Incompatible ", var_type)concat("Error: Incompatible ", " conversion on line ")"Error: Incompatible " + itos(line_num));
+printf("%s\n", concat("Error: Incompatible ", right_type)concat("Error: Incompatible ", " to ")concat("Error: Incompatible ", var_type)concat("Error: Incompatible ", " conversion on line ")concat("Error: Incompatible ", itos(line_num)));
 return -1;
 }
 expect("SEMICOL");
@@ -445,7 +453,7 @@ return 0;
 else if (strcmp(peek(), "LSQUARE") == 0) {
 next();
 if (str_ends_with(var_type, *) == 0) {
-printf("%s\n", concat("Error: Variable '", var_name)concat("Error: Variable '", "' is not an array and cannot be indexed, line ")"Error: Variable '" + itos(line_num));
+printf("%s\n", concat("Error: Variable '", var_name)concat("Error: Variable '", "' is not an array and cannot be indexed, line ")concat("Error: Variable '", itos(line_num)));
 return -1;
 }
 emit(var_name);
@@ -453,7 +461,7 @@ emit("[");
 expr();
 emit("] = ");
 if (strcmp(expr_type, "int") != 0) {
-printf("%s\n", concat("Error: Array index must be an integer, got ", expr_type)concat("Error: Array index must be an integer, got ", ", line ")"Error: Array index must be an integer, got " + itos(line_num));
+printf("%s\n", concat("Error: Array index must be an integer, got ", expr_type)concat("Error: Array index must be an integer, got ", ", line ")concat("Error: Array index must be an integer, got ", itos(line_num)));
 return -1;
 }
 expect("RSQUARE");
@@ -470,14 +478,14 @@ else if (strcmp(var_type, "char*") == 0) {
 base_type = "char";
 }
 if (strcmp(base_type, right_type) != 0) {
-printf("%s\n", concat("Error: Incompatible types: cannot assign ", right_type)concat("Error: Incompatible types: cannot assign ", " to array element of type ")concat("Error: Incompatible types: cannot assign ", base_type)concat("Error: Incompatible types: cannot assign ", ", line ")"Error: Incompatible types: cannot assign " + itos(line_num));
+printf("%s\n", concat("Error: Incompatible types: cannot assign ", right_type)concat("Error: Incompatible types: cannot assign ", " to array element of type ")concat("Error: Incompatible types: cannot assign ", base_type)concat("Error: Incompatible types: cannot assign ", ", line ")concat("Error: Incompatible types: cannot assign ", itos(line_num)));
 return -1;
 }
 expect("SEMICOL");
 return 0;
 }
 else {
-printf("%s\n", concat("Error: Invalid statement start. Expected '=', '(', or '[' after ID '", var_name)concat("Error: Invalid statement start. Expected '=', '(', or '[' after ID '", "', line ")"Error: Invalid statement start. Expected '=', '(', or '[' after ID '" + itos(line_num));
+printf("%s\n", concat("Error: Invalid statement start. Expected '=', '(', or '[' after ID '", var_name)concat("Error: Invalid statement start. Expected '=', '(', or '[' after ID '", "', line ")concat("Error: Invalid statement start. Expected '=', '(', or '[' after ID '", itos(line_num)));
 return -1;
 }
 }
@@ -513,7 +521,7 @@ emit("}
 }
 else {
 int tok_line = token_lines[parser_pos];
-printf("%s\n", "Error: Expected 'if' or '{' after 'else', line " + itos(tok_line));
+printf("%s\n", concat("Error: Expected 'if' or '{' after 'else', line ", itos(tok_line)));
 return -1;
 }
 }
@@ -544,7 +552,7 @@ emit(";
 char* ret_type = expr_type;
 expect("SEMICOL");
 if (strcmp(current_fn_ret_type, ret_type) != 0) {
-printf("%s\n", concat("Error: Incompatible ", ret_type)concat("Error: Incompatible ", " to ")concat("Error: Incompatible ", current_fn_ret_type)concat("Error: Incompatible ", " conversion on line ")"Error: Incompatible " + itos(line_num));
+printf("%s\n", concat("Error: Incompatible ", ret_type)concat("Error: Incompatible ", " to ")concat("Error: Incompatible ", current_fn_ret_type)concat("Error: Incompatible ", " conversion on line ")concat("Error: Incompatible ", itos(line_num)));
 return -1;
 }
 return 0;
@@ -564,7 +572,7 @@ emit(" ");
 relational();
 char* right_type = expr_type;
 if (strcmp(left_type, "int") != 0 || strcmp(right_type, "int") != 0) {
-printf("%s\n", "Error: Logical operators '&&' and '||' can only be used on integers, line " + itos(token_lines[op_idx]));
+printf("%s\n", concat("Error: Logical operators '&&' and '||' can only be used on integers, line ", itos(token_lines[op_idx])));
 return -1;
 }
 expr_type = "int";
@@ -606,7 +614,7 @@ emit(right_code);
 emit(") != 0");
 }
 else {
-printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed on strings, line ")"Error: Operator '" + itos(line));
+printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed on strings, line ")concat("Error: Operator '", itos(line)));
 return -1;
 }
 }
@@ -619,12 +627,12 @@ emit(" ");
 emit(right_code);
 }
 else {
-printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed on strings, line ")"Error: Operator '" + itos(line));
+printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed on strings, line ")concat("Error: Operator '", itos(line)));
 return -1;
 }
 }
 else if (strcmp(left_type, "char*") == 0 || strcmp(right_type, "char*") == 0) {
-printf("%s\n", "Error: Comparison between string and non-string, line " + itos(line));
+printf("%s\n", concat("Error: Comparison between string and non-string, line ", itos(line)));
 return -1;
 }
 else {
@@ -685,7 +693,7 @@ emit(right_code);
 expr_type = right_type;
 }
 else {
-printf("%s\n", "Error: Cannot subtract a pointer from an integer, line " + itos(line));
+printf("%s\n", concat("Error: Cannot subtract a pointer from an integer, line ", itos(line)));
 return -1;
 }
 }
@@ -698,7 +706,7 @@ emit(")");
 expr_type = "char*";
 }
 else {
-printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed between '")concat("Error: Operator '", left_type)concat("Error: Operator '", "' and '")concat("Error: Operator '", right_type)concat("Error: Operator '", "', line ")"Error: Operator '" + itos(line));
+printf("%s\n", concat("Error: Operator '", op)concat("Error: Operator '", "' not allowed between '")concat("Error: Operator '", left_type)concat("Error: Operator '", "' and '")concat("Error: Operator '", right_type)concat("Error: Operator '", "', line ")concat("Error: Operator '", itos(line)));
 return -1;
 }
 left_type = expr_type;
@@ -723,7 +731,7 @@ emit(" ");
 unary();
 char* right_type = expr_type;
 if (strcmp(left_type, "int") != 0 || strcmp(right_type, "int") != 0) {
-printf("%s\n", "Error: Operators '*' and '/' can only be used on integers, line " + itos(token_lines[op_idx]));
+printf("%s\n", concat("Error: Operators '*' and '/' can only be used on integers, line ", itos(token_lines[op_idx])));
 return -1;
 }
 expr_type = "int";
@@ -738,7 +746,7 @@ int op_idx = next();
 emit("-");
 unary();
 if (strcmp(expr_type, "int") != 0) {
-printf("%s\n", "Error: Unary '-' operator can only be applied to integers, line " + itos(token_lines[op_idx]));
+printf("%s\n", concat("Error: Unary '-' operator can only be applied to integers, line ", itos(token_lines[op_idx])));
 return -1;
 }
 expr_type = "int";
@@ -775,12 +783,11 @@ else if (strcmp(tok_type, "ID") == 0) {
 char* var_name = token_pool + tok_val_idx;
 char* sym_type = get_symbol_type(0, var_name);
 if (strcmp(sym_type, "") == 0) {
-printf("%s\n", concat("Error: Undeclared identifier '", var_name)concat("Error: Undeclared identifier '", "' on line ")"Error: Undeclared identifier '" + itos(tok_line));
+printf("%s\n", concat("Error: Undeclared identifier '", var_name)concat("Error: Undeclared identifier '", "' on line ")concat("Error: Undeclared identifier '", itos(tok_line)));
 return -1;
 }
 if (strcmp(peek(), "LPAREN") == 0) {
 next();
-expr_type = sym_type;
 emit(var_name);
 emit("(");
 int arg_count = 0;
@@ -792,12 +799,13 @@ emit(", ");
 expr();
 arg_count = arg_count + 1;
 }
+expr_type = sym_type;
 expect("RPAREN");
 emit(")");
 }
 else if (strcmp(peek(), "LSQUARE") == 0) {
 if (str_ends_with(sym_type, *) == 0) {
-printf("%s\n", concat("Error: Variable '", var_name)concat("Error: Variable '", "' is not an array and cannot be indexed, line ")"Error: Variable '" + itos(tok_line));
+printf("%s\n", concat("Error: Variable '", var_name)concat("Error: Variable '", "' is not an array and cannot be indexed, line ")concat("Error: Variable '", itos(tok_line)));
 return -1;
 }
 next();
@@ -805,7 +813,7 @@ emit(var_name);
 emit("[");
 expr();
 if (strcmp(expr_type, "int") != 0) {
-printf("%s\n", "Error: Array index must be an integer, line " + itos(tok_line));
+printf("%s\n", concat("Error: Array index must be an integer, line ", itos(tok_line)));
 return -1;
 }
 expect("RSQUARE");
@@ -829,7 +837,7 @@ emit(var_name);
 }
 }
 else {
-printf("%s\n", concat("Error: Unexpected token in expression: ", tok_type)concat("Error: Unexpected token in expression: ", " on line ")"Error: Unexpected token in expression: " + itos(tok_line));
+printf("%s\n", concat("Error: Unexpected token in expression: ", tok_type)concat("Error: Unexpected token in expression: ", " on line ")concat("Error: Unexpected token in expression: ", itos(tok_line)));
 return -1;
 }
 return 0;
@@ -848,7 +856,7 @@ if (strcmp(tok_type, kind) == 0) {
 return next();
 }
 int tok_line = token_lines[parser_pos];
-printf("%s\n", "Error: Syntax Error on line " + itos(tok_line));
+printf("%s\n", concat("Error: Syntax Error on line ", itos(tok_line)));
 printf("%s\n", concat("Expected token: ", kind));
 printf("%s\n", concat("... but got token: ", tok_type));
 return -1;
@@ -895,10 +903,10 @@ return 0;
 }
 int str_ends_with(char* s, char c) {
 int len = strlen(s);
-if ( == 0) {
+if (len == 0) {
 return 0;
 }
-if (s[ - 1] == c) {
+if (s[len - 1] == c) {
 return 1;
 }
 return 0;
@@ -945,11 +953,11 @@ return "";
 int emit(char* s) {
 int i = 0;
 int len = strlen(s);
-if ((c_code_pos +  >= 1000000)) {
+if (c_code_pos + len >= 1000000) {
 printf("%s\n", "CRITICAL ERROR: C code output buffer overflow! Increase c_code_buffer size.");
 return -1;
 }
-while (i < ) {
+while (i < len) {
 c_code_buffer[c_code_pos] = s[i];
 c_code_pos = c_code_pos + 1;
 i = i + 1;
@@ -986,12 +994,12 @@ return "";
 }
 int end_pos = c_code_pos;
 int len = end_pos - start_pos;
-if ((len >= 4096)) {
+if (len >= 4096) {
 printf("%s\n", "Error: Expression too complex to peek (max 4096 chars).");
 return "";
 }
 int i = 0;
-while ((i < len)) {
+while (i < len) {
 expr_peek_buffer[i] = c_code_buffer[start_pos + i];
 i = i + 1;
 }
@@ -1121,11 +1129,11 @@ while (source_code[pos] != 0) {
 c = source_code[pos];
 col = pos - line_start;
 i = 0;
-if ((token_count >= 50000)) {
+if (token_count >= 50000) {
 printf("%s\n", "CRITICAL ERROR: Too many tokens! Increase token array sizes.");
 return 0;
 }
-if ((pool_pos >= 499000)) {
+if (pool_pos >= 499000) {
 printf("%s\n", "CRITICAL ERROR: String pool overflow! Increase token_pool size.");
 return 0;
 }
@@ -1360,7 +1368,7 @@ token_lines[token_count] = line_num;
 token_cols[token_count] = token_start_col;
 token_values[token_count] = pool_pos;
 j = 0;
-while ((j <= i)) {
+while (j <= i) {
 token_pool[pool_pos] = buffer[j];
 pool_pos = pool_pos + 1;
 j = j + 1;
@@ -1411,20 +1419,20 @@ pool_pos = pool_pos + 2;
 token_count = token_count + 1;
 }
 else {
-printf("%s\n", "Error: Unexpected character!");
-printf("%c\n", ctos(c));
+printf("%s\n", concat("Error: Unexpected character!", ctos(c)));
 return 1;
 }
 }
 add_simple_token(token_count, "EOF", line_num, col);
 token_count = token_count + 1;
-return token_count;
+n_tokens = token_count;
+return 0;
 }
 int is_letter(char c) {
 return (c >= a && c <= z) || (c >= A && c <= Z) || (c == _);
 }
 int is_digit(char c) {
-return (c >= 0 && c <= 9);
+return c >= 0 && c <= 9;
 }
 int is_space(char c) {
 return (c ==  ) || (c == 	) || (c == 
