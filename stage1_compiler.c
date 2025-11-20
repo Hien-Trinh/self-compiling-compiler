@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
     c_prototype();
     preset_global_functions();
     // 3. Tokenize
-    n_tokens = tokenize(code);
+    tokenize(code);
     // 4. Parse
     parse();
     // 5. Emit Helpers
@@ -351,8 +351,6 @@ int let_stmt(int is_global) {
             var_type = "int*";
         } else if (strcmp(var_type, "char") == 0) {
                  var_type = "char*";
-             } else if (strcmp(var_type, "char*") == 0) {
-                 var_type = "char**";
              } else {
                  printf("%s\n", concat("Error: Cannot make array of type ", var_type));
                  return -1;
@@ -364,7 +362,7 @@ int let_stmt(int is_global) {
     char* var_name = token_pool + token_values[var_name_idx];
     // Check redefinition
     if ((is_global == 0 && strcmp(get_symbol_type(0, var_name), "") != 0) || (is_global == 1 && strcmp(get_symbol_type(1, var_name), "") != 0)) {
-        printf("%s\n", concat(concat(concat("Error: Redefinition of variable", var_name), ", line "), itos(line_num)));
+        printf("%s\n", concat(concat(concat("Error: Redefinition of variable ", var_name), ", line "), itos(line_num)));
         return -1;
         // Error
     }
@@ -455,11 +453,11 @@ int print_stmt() {
     char* expr_code = peek_code("expr");
     char* type = expr_type;
     // peek_code sets this global
-    if ((strcmp(type, "int") == 0)) {
+    if (strcmp(type, "int") == 0) {
         emit("printf(\"%d\\n\", ");
-    } else if ((strcmp(type, "char") == 0)) {
+    } else if (strcmp(type, "char") == 0) {
                emit("printf(\"%c\\n\", ");
-           } else if ((strcmp(type, "char*") == 0)) {
+           } else if (strcmp(type, "char*") == 0) {
                emit("printf(\"%s\\n\", ");
            } else {
                printf("%s\n", concat(concat(concat("Error: Unprintable type '", type), "' on line "), itos(line_num)));
@@ -560,6 +558,8 @@ int id_stmt() {
             base_type = "int";
         } else if (strcmp(var_type, "char*") == 0) {
                  base_type = "char";
+             } else if (strcmp(var_type, "char**") == 0) {
+                 base_type = "char*";
              }
              if (strcmp(base_type, right_type) != 0) {
             printf("%s\n", concat(concat(concat(concat(concat("Error: Incompatible types: cannot assign ", right_type), " to array element of type "), base_type), ", line "), itos(line_num)));
@@ -665,7 +665,7 @@ int logical() {
         emit(" ");
         emit(op);
         emit(" ");
-        relational();
+        logical();
         // Emits right side
         char* right_type = expr_type;
         // Type check: logical ops must be on ints (or chars)
@@ -701,38 +701,47 @@ int relational() {
             char* op = op_to_c_op(token_types[op_idx]);
             int line = token_lines[op_idx];
             // 2. Peek RHS
-            char* rhs_code = peek_code("additive");
-            char* rhs_type = expr_type;
+            char* right_code = peek_code("relational");
+            char* right_type = expr_type;
             // 3. Generate Code
-            if ((strcmp(left_type, "char*") == 0 && strcmp(rhs_type, "char*") == 0)) {
-                if ((strcmp(op, "==") == 0)) {
+            if (strcmp(left_type, "char*") == 0 && strcmp(right_type, "char*") == 0) {
+                if (strcmp(op, "==") == 0) {
                     emit("strcmp(");
                     emit(left_buf);
                     emit(", ");
-                    emit(rhs_code);
+                    emit(right_code);
                     emit(") == 0");
-                } else if ((strcmp(op, "!=") == 0)) {
+                } else if (strcmp(op, "!=") == 0) {
                            emit("strcmp(");
                            emit(left_buf);
                            emit(", ");
-                           emit(rhs_code);
+                           emit(right_code);
                            emit(") != 0");
                        } else {
                            printf("%s\n", concat(concat(concat("Error: Operator '", op), "' not allowed on strings, line "), itos(line)));
                            return -1;
                        }
-            } else if ((strcmp(left_type, "char*") == 0 || strcmp(rhs_type, "char*") == 0)) {
+            } else if ((strcmp(left_type, "char*") == 0 && strcmp(right_type, "int") == 0) || (strcmp(left_type, "int") == 0 && strcmp(right_type, "char*") == 0)) {
+                       if (strcmp(op, "==") == 0 || strcmp(op, "!=") == 0) {
+                    emit(left_buf);
+                    emit(" ");
+                    emit(op);
+                    emit(" ");
+                    emit(right_code);
+                } else {
+                    printf("%s\n", concat(concat(concat("Error: Operator '", op), "' not allowed on strings, line "), itos(line)));
+                    return -1;
+                }
+                   } else if (strcmp(left_type, "char*") == 0 || strcmp(right_type, "char*") == 0) {
                        printf("%s\n", concat("Error: Comparison between string and non-string, line ", itos(line)));
                        return -1;
                    } else {
                        // Standard int/char
-                       emit("(");
                        emit(left_buf);
                        emit(" ");
                        emit(op);
                        emit(" ");
-                       emit(rhs_code);
-                       emit(")");
+                       emit(right_code);
                    }
             expr_type = "int";
             left_type = "int";
@@ -755,7 +764,7 @@ int additive() {
     // Need local copy because peek_code buffer will be overwritten
     char left_buf[2048];
     int i = 0;
-    while ((left_ptr[i] != '\0')) {
+    while (left_ptr[i] != '\0') {
         left_buf[i] = left_ptr[i];
         i = i + 1;
     }
@@ -766,7 +775,7 @@ int additive() {
             char* op = op_to_c_op(token_types[op_idx]);
             int line = token_lines[op_idx];
             // 2. Peek RHS
-            char* right_code = peek_code("multiplicative");
+            char* right_code = peek_code("additive");
             char* right_type = expr_type;
             // 3. Generate Code
             // Case 1: int + int
@@ -878,10 +887,14 @@ int atom() {
         emit(token_pool + tok_val_idx);
     } else if (strcmp(tok_type, "CHAR") == 0) {
              expr_type = "char";
+             emit("'");
              emit(token_pool + tok_val_idx);
+             emit("'");
          } else if (strcmp(tok_type, "STRING") == 0) {
              expr_type = "char*";
+             emit("\"");
              emit(token_pool + tok_val_idx);
+             emit("\"");
          }
          // Case 2: Parenthesized Expression
          else if (strcmp(tok_type, "LPAREN") == 0) {
@@ -903,8 +916,6 @@ int atom() {
 
              if (strcmp(peek(), "LPAREN") == 0) {
             next();
-            expr_type = sym_type;
-            // Type is the function's return type
             emit(var_name);
             emit("(");
             int arg_count = 0;
@@ -916,6 +927,8 @@ int atom() {
                 expr();
                 arg_count = arg_count + 1;
             }
+            expr_type = sym_type;
+            // Type is the function's return type
             expect("RPAREN");
             emit(")");
         }
@@ -942,6 +955,8 @@ int atom() {
                 expr_type = "int";
             } else if (strcmp(sym_type, "char*") == 0) {
                      expr_type = "char";
+                 } else if (strcmp(sym_type, "char**") == 0) {
+                     expr_type = "char*";
                  } else {
                      expr_type = "int";
                  }
@@ -1117,7 +1132,7 @@ int emit(char* s) {
     int i = 0;
     int len = strlen(s);
     // --- Bounds check ---
-    if ((c_code_pos + len >= 1000000)) {
+    if (c_code_pos + len >= 1000000) {
         printf("%s\n", "CRITICAL ERROR: C code output buffer overflow! Increase c_code_buffer size.");
         return -1;
         // This will likely cascade errors, but it prints the warning.
@@ -1134,19 +1149,19 @@ int emit(char* s) {
 
 char* peek_code(char* level) {
     int start_pos = c_code_pos;
-    if ((strcmp(level, "expr") == 0)) {
+    if (strcmp(level, "expr") == 0) {
         expr();
-    } else if ((strcmp(level, "logical") == 0)) {
+    } else if (strcmp(level, "logical") == 0) {
              logical();
-         } else if ((strcmp(level, "relational") == 0)) {
+         } else if (strcmp(level, "relational") == 0) {
              relational();
-         } else if ((strcmp(level, "additive") == 0)) {
+         } else if (strcmp(level, "additive") == 0) {
              additive();
-         } else if ((strcmp(level, "multiplicative") == 0)) {
+         } else if (strcmp(level, "multiplicative") == 0) {
              multiplicative();
-         } else if ((strcmp(level, "unary") == 0)) {
+         } else if (strcmp(level, "unary") == 0) {
              unary();
-         } else if ((strcmp(level, "atom") == 0)) {
+         } else if (strcmp(level, "atom") == 0) {
              atom();
          } else {
              printf("%s\n", concat("Error: Unknown peek level: ", level));
@@ -1154,12 +1169,12 @@ char* peek_code(char* level) {
          }
     int end_pos = c_code_pos;
     int len = end_pos - start_pos;
-    if ((len >= 4096)) {
+    if (len >= 4096) {
         printf("%s\n", "Error: Expression too complex to peek (max 4096 chars).");
         return "";
     }
     int i = 0;
-    while ((i < len)) {
+    while (i < len) {
         expr_peek_buffer[i] = c_code_buffer[start_pos + i];
         i = i + 1;
     }
@@ -1256,11 +1271,11 @@ int tokenize(char* source_code) {
         col = pos - line_start;
         i = 0;
         // --- Bounds check ---
-        if ((token_count >= 50000)) {
+        if (token_count >= 50000) {
             printf("%s\n", "CRITICAL ERROR: Too many tokens! Increase token array sizes.");
             return 0;
         }
-        if ((pool_pos >= 499000)) {
+        if (pool_pos >= 499000) {
             // Leave some safety margin
             printf("%s\n", "CRITICAL ERROR: String pool overflow! Increase token_pool size.");
             return 0;
@@ -1449,12 +1464,14 @@ int tokenize(char* source_code) {
                  c = source_code[pos];
                  while (c != '"' && c != '\0') {
                 if (c == '\\') {
+                    buffer[i] = '\\';
+                    i = i + 1;
                     pos = pos + 1;
                     c = source_code[pos];
                     if (c == 'n') {
-                        buffer[i] = '\n';
+                        buffer[i] = 'n';
                     } else if (c == 't') {
-                               buffer[i] = '\t';
+                               buffer[i] = 't';
                            } else if (c == '"') {
                                buffer[i] = '"';
                            } else if (c == '\\') {
@@ -1482,7 +1499,7 @@ int tokenize(char* source_code) {
                  token_cols[token_count] = token_start_col;
                  token_values[token_count] = pool_pos;
                  j = 0;
-                 while ((j <= i)) {
+                 while (j <= i) {
                 token_pool[pool_pos] = buffer[j];
                 pool_pos = pool_pos + 1;
                 j = j + 1;
@@ -1493,13 +1510,17 @@ int tokenize(char* source_code) {
                  pos = pos + 1;
                  c = source_code[pos];
                  token_val = c;
+                 int is_escape = 0;
                  if (c == '\\') {
+                token_pool[pool_pos] = '\\';
+                pool_pos = pool_pos + 1;
+                is_escape = 1;
                 pos = pos + 1;
                 c = source_code[pos];
                 if (c == 'n') {
-                    token_val = '\n';
+                    token_val = 'n';
                 } else if (c == 't') {
-                           token_val = '\t';
+                           token_val = 't';
                        } else if (c == '\'') {
                            token_val = '\'';
                        } else if (c == '\\') {
@@ -1521,7 +1542,7 @@ int tokenize(char* source_code) {
                  token_types[token_count] = "CHAR";
                  token_lines[token_count] = line_num;
                  token_cols[token_count] = token_start_col;
-                 token_values[token_count] = pool_pos;
+                 token_values[token_count] = pool_pos - is_escape;
                  token_pool[pool_pos] = buffer[0];
                  token_pool[pool_pos + 1] = buffer[1];
                  pool_pos = pool_pos + 2;
@@ -1529,15 +1550,15 @@ int tokenize(char* source_code) {
              }
              // --- 7. Handle Errors ---
              else {
-                 printf("%s\n", "Error: Unexpected character!");
-                 printf("%s\n", ctos(c));
+                 printf("%s\n", concat("Error: Unexpected character!", ctos(c)));
                  return 1;
              }
     }
     // Add EOF Token
     add_simple_token(token_count, "EOF", line_num, col);
     token_count = token_count + 1;
-    return token_count;
+    n_tokens = token_count;
+    return 0;
 }
 
 // =============================================================
@@ -1554,7 +1575,7 @@ int is_letter(char c) {
 int is_digit(char c) {
     // Checks if a character is a 0-9 digit.
     // Corresponds to: \d
-    return (c >= '0' && c <= '9');
+    return c >= '0' && c <= '9';
 }
 
 int is_space(char c) {
